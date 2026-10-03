@@ -81,8 +81,8 @@ export async function renderMore() {
           ${select('set-fallbackLang', LANGS.filter((l) => l.group === 'intl').map((l) => [l.code, `${l.flag} ${l.label}`]), settings.fallbackLang)}</div>
         <div class="row"><span class="row-icon">${I.store}</span><span class="row-main"><span class="row-title">Cardmarket</span><div class="row-sub">Sprache der Website</div></span>
           ${select('set-siteLang', [['de', 'Deutsch'], ['en', 'English'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano']], settings.siteLang)}</div>
-        <div class="row"><span class="row-icon">${I.star}</span><span class="row-main"><span class="row-title">Mindestzustand</span><div class="row-sub">Filter für Cardmarket-Angebote</div></span>
-          ${select('set-condition', CONDITIONS.map((c) => [c.id, `ab ${c.short} – ${c.label}`]), settings.condition)}</div>
+        <div class="row"><span class="row-icon">${I.star}</span><span class="row-main"><span class="row-title">Mindestzustand</span><div class="row-sub">Für Cardmarket-Angebote (NM = Near Mint)</div></span>
+          ${select('set-condition', CONDITIONS.map((c) => [c.id, `ab ${c.short}`]), settings.condition)}</div>
         <div class="row"><span class="row-icon">${I.dollar}</span><span class="row-main"><span class="row-title">TCGplayer-Preis zeigen</span><div class="row-sub">US-Marktpreis in Dollar als Vergleich</div></span>${sw('set-showUSD', settings.showUSD)}</div>
         <div class="row"><span class="row-icon">${I.vibe}</span><span class="row-main"><span class="row-title">Vibration</span><div class="row-sub">Haptisches Feedback beim Scannen</div></span>${sw('set-haptics', settings.haptics)}</div>
         ${
