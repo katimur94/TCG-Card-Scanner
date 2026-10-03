@@ -1,0 +1,60 @@
+name: GitHub Pages
+
+# Veröffentlicht HoloScan bei jedem Push auf den Standard-Branch.
+# Montags wird zusätzlich der Kartenindex (neue Sets) aus TCGdex aktualisiert.
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Kartenindex aktualisieren
+        if: github.event_name != 'push'
+        timeout-minutes: 20
+        # Schlägt der Abruf fehl, wird der eingecheckte Index verwendet.
+        run: node scripts/build-index.mjs || git checkout -- data
+
+      - name: Build-ID für Service-Worker-Updates setzen
+        run: sed -i "s/__BUILD_ID__/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" sw.js
+
+      - name: Seite zusammenstellen
+        run: |
+          mkdir -p _site
+          cp -r index.html manifest.webmanifest sw.js css js data assets vendor _site/
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,28 @@
+{
+  "id": "./",
+  "name": "HoloScan – Pokémon Karten-Scanner",
+  "short_name": "HoloScan",
+  "description": "Pokémon-Karten scannen und sofort den Cardmarket-Preis sehen – mit Spracherkennung, Sammlung, Serienscan und Offline-Modus.",
+  "lang": "de",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#07060d",
+  "theme_color": "#07060d",
+  "categories": ["utilities", "shopping", "entertainment"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Karte scannen", "short_name": "Scannen", "url": "./?view=scan", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Meine Sammlung", "short_name": "Sammlung", "url": "./?view=collection", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Karte suchen", "short_name": "Suche", "url": "./?view=search", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
