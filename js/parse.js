@@ -55,7 +55,8 @@ const STAGE_WORDS = [
 const STAGE_RE = new RegExp(`\\b(${STAGE_WORDS.map((w) => w.replace(/ /g, '\\s')).join('|')})\\b`, 'g');
 
 // "Entwickelt sich aus Glumanda" & Co.: der Name dahinter ist die Vorstufe, nicht diese Karte
-const EVOLVES_RE = /\b(evolves from|entwickelt sich aus|evolue de|evolution de|evoluciona de|si evolve da|evolui de)\s+\S+(\s+(ex|v|gx))?/g;
+// Tolerant gegenüber abgeschnittenen Wörtern ("volution de Fouinette", "rrn sich aus Glutexo").
+const EVOLVES_RE = /\b(\S*vol\S*\s+(from|de|da)|(\S+\s+)?sich aus)\s+\S+(\s+(ex|v|gx))?/g;
 // WotC-Ära: "Put Charizard on the Stage 1 card"
 const PUT_RE = /\b(put|lege|place|pon|metti|coloque)\b.*\b(card|karte|carte|carta)\b/g;
 
@@ -96,7 +97,8 @@ export function parseCard(ocr, index) {
       if (!a || !b) continue;
       const num = parseInt(a.digits, 10);
       const total = parseInt(b.digits, 10);
-      if (!(total >= 5 && total <= 400) || num > 500) continue;
+      // Gesamtzahlen > 400 gibt es nicht – sind dann eine falsch gelesene Ziffer (189 -> 789), nur unscharf nutzbar
+      if (!(total >= 5 && total <= 999) || num > 500) continue;
       const prefix = a.prefix || b.prefix;
       numbers.push({
         num,
@@ -110,9 +112,10 @@ export function parseCard(ocr, index) {
       });
     }
 
-    // Schrägstrich als 7/1/l gelesen: "0067 165" -> 006/165 (nur dreistellig, wird über die Sets geprüft)
+    // Schrägstrich als 7/1/l/Punkt gelesen: "0067 165", "006. 165" -> 006/165
+    // (nur dreistellig wie seit Schwert & Schild üblich; wird über die Sets geprüft)
     if (!/[/⁄∕]/.test(raw)) {
-      for (const m of raw.matchAll(/(?:^|\D)(\d{3})\s?[7lI1|]\s?(\d{3})(?!\d)/g)) {
+      for (const m of raw.matchAll(/(?:^|\D)(\d{3})\s?[7lI1|.,;:]\s?(\d{3})(?!\d)/g)) {
         const num = parseInt(m[1], 10);
         const total = parseInt(m[2], 10);
         if (total >= 20 && total <= 400 && num <= 500) {
@@ -153,6 +156,17 @@ export function parseCard(ocr, index) {
 
   const hp = ocr.text.match(/\b(HP|KP|PV|PS)\s*(\d{2,3})\b|\b(\d{2,3})\s*(HP|KP|PV|PS)\b/);
 
+  // Copyright-Jahr ("©2023 Pokémon/Nintendo/…", "© 1999 Wizards") – liegt nahe am Erscheinungsjahr
+  let year = null;
+  const maxYear = new Date().getFullYear() + 1;
+  for (const l of ocr.lines) {
+    if (!/©|nintendo|creatures|game\s?freak|wizards/i.test(l.text)) continue;
+    for (const m of l.text.matchAll(/(?:^|\D)((?:19|20)\d{2})(?!\d)/g)) {
+      const y = parseInt(m[1], 10);
+      if (y >= 1995 && y <= maxYear && (!year || y > year)) year = y;
+    }
+  }
+
   numbers.sort((a, b) => b.weight - a.weight);
 
   return {
@@ -165,6 +179,7 @@ export function parseCard(ocr, index) {
     nameLines,
     allLines,
     hp: hp ? parseInt(hp[2] || hp[3], 10) : null,
+    year,
   };
 }
 

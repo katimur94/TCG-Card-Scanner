@@ -82,7 +82,8 @@ export function prepare(src, { x = 0, y = 0, w, h, targetW = 1200, maxH = 2400 }
   return c;
 }
 
-function linesOf(data, { offsetY = 0, spanY = 1, height }) {
+/** Zeilen mit Lage relativ zur Karte (y, h) bzw. zum Bild (x0/x1 als Anteil der Breite). */
+function linesOf(data, { offsetY = 0, spanY = 1, height, width }) {
   const out = [];
   for (const block of data.blocks || []) {
     for (const para of block.paragraphs || []) {
@@ -90,11 +91,49 @@ function linesOf(data, { offsetY = 0, spanY = 1, height }) {
         const text = (line.text || '').replace(/\s+/g, ' ').trim();
         if (!text) continue;
         const cy = (line.bbox.y0 + line.bbox.y1) / 2 / height;
-        out.push({ text, conf: line.confidence / 100, y: offsetY + cy * spanY, x: line.bbox.x0, h: ((line.bbox.y1 - line.bbox.y0) / height) * spanY });
+        out.push({
+          text,
+          conf: line.confidence / 100,
+          y: offsetY + cy * spanY,
+          h: ((line.bbox.y1 - line.bbox.y0) / height) * spanY,
+          x0: width ? line.bbox.x0 / width : 0,
+          x1: width ? line.bbox.x1 / width : 1,
+        });
       }
     }
   }
   return out;
+}
+
+/**
+ * Kartenbereich in einem Foto aus der Lage der Textzeilen schätzen.
+ * Name ~7 % unter der Oberkante, Copyright ~95 %; lange Textzeilen füllen ~84 % der Kartenbreite.
+ * @returns {{top, span, left, right}} relativ zum Bild
+ */
+function estimateCard(lines, imgW, imgH) {
+  const good = lines.filter((l) => l.conf >= 0.5 && /[A-Za-z0-9]{3}/.test(l.text));
+  if (good.length < 4) return null;
+  const minY = Math.min(...good.map((l) => l.y));
+  const maxY = Math.max(...good.map((l) => l.y));
+  const long = good.filter((l) => l.text.length >= 18);
+  let cardH = (maxY - minY) / 0.88;
+  let left = 0;
+  let right = 1;
+  if (long.length >= 2) {
+    left = Math.min(...long.map((l) => l.x0));
+    right = Math.max(...long.map((l) => l.x1));
+    const cardW = (right - left) / 0.84;
+    const pad = cardW * 0.1;
+    left = Math.max(0, left - pad);
+    right = Math.min(1, right + pad);
+    // Höhe aus der Breite (Seitenverhältnis 63:88), umgerechnet auf die Bildhöhe
+    const fromWidth = (cardW * imgW * (88 / 63)) / imgH;
+    // Fehlt oben Text (Name nicht gelesen), ist die Höhe aus der Breite verlässlicher
+    if (cardH < fromWidth * 0.8) cardH = fromWidth;
+    return { top: Math.max(0, maxY + 0.05 * cardH - cardH), span: Math.min(1, cardH), left, right };
+  }
+  cardH = Math.max(0.25, cardH);
+  return { top: Math.max(0, minY - 0.07 * cardH), span: Math.min(1, cardH), left, right };
 }
 
 async function run(worker, canvas, psm) {
@@ -119,29 +158,30 @@ export async function readCard(card, { fitToText = false, onStatus, hasNumber } 
 
     // 1) Ganze Karte, "verstreuter Text" – findet Name, Attacken, Schwäche/Resistenz und meist die Nummer
     const full = prepare(card, { targetW: fitToText ? 1600 : 1100, maxH: 2400 });
-    let lines = linesOf(await run(worker, full, '11'), { height: full.height }).map((l) => ({ ...l, pass: 'full' }));
+    let lines = linesOf(await run(worker, full, '11'), { height: full.height, width: full.width }).map((l) => ({ ...l, pass: 'full' }));
 
-    // Bei Fotos: Kartenbereich aus der Lage verlässlicher Textzeilen schätzen.
-    // Oberste Zeile (Name) liegt bei ~7 % der Kartenhöhe, unterste (Copyright) bei ~95 %.
+    // Bei Fotos: Kartenbereich aus der Lage verlässlicher Textzeilen schätzen
     let top = 0;
     let span = 1;
+    let left = 0;
+    let right = 1;
     if (fitToText) {
-      const good = lines.filter((l) => l.conf >= 0.5 && /[A-Za-z0-9]{3}/.test(l.text));
-      if (good.length >= 4) {
-        const minY = Math.min(...good.map((l) => l.y));
-        const maxY = Math.max(...good.map((l) => l.y));
-        const cardH = Math.max(0.25, (maxY - minY) / 0.88);
-        top = Math.max(0, minY - 0.07 * cardH);
-        span = Math.min(1 - top, cardH);
+      const est = estimateCard(lines, card.width, card.height);
+      if (est) {
+        ({ top, span, left, right } = est);
+        span = Math.min(1 - top, span);
         lines = lines.map((l) => ({ ...l, y: (l.y - top) / span }));
       }
     }
 
+    // Streifen der Karte vergrößert lesen (seitlich auf die Karte zugeschnitten)
     const strip = async (from, to, targetW, pass) => {
       const y0 = top + span * from;
       const hRel = Math.min(1 - y0, span * (to - from));
       if (hRel <= 0.01) return [];
-      const can = prepare(card, { x: 0, y: card.height * y0, w: card.width, h: card.height * hRel, targetW, maxH: 1000 });
+      const x = card.width * left;
+      const w = card.width * (right - left);
+      const can = prepare(card, { x, y: card.height * y0, w, h: card.height * hRel, targetW, maxH: 1000 });
       const data = await run(worker, can, '11');
       return linesOf(data, { height: can.height, offsetY: from, spanY: hRel / span }).map((l) => ({ ...l, pass }));
     };
@@ -152,7 +192,7 @@ export async function readCard(card, { fitToText = false, onStatus, hasNumber } 
     // 3) Unterer Rand vergrößert – dort stehen Kartennummer, Set-Kürzel und Sprachcode
     if (!hasNumber || !hasNumber(lines)) {
       onStatus?.('Kartennummer wird gelesen …');
-      lines = lines.concat(await strip(0.78, 1, 2000, 'bottom'));
+      lines = lines.concat(await strip(fitToText ? 0.74 : 0.78, 1, 2000, 'bottom'));
     }
 
     const text = lines.map((l) => l.text).join('\n');

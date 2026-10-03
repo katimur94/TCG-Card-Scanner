@@ -58,6 +58,7 @@ class NameDirectory {
     const qGrams = qs.map(grams);
     const pre = [];
     for (const b of this.list) {
+      if (b.norm.length <= 2 && !qs.includes(b.norm)) continue;
       b.grams ||= grams(b.norm);
       let dice = 0;
       for (let i = 0; i < qs.length; i++) {
@@ -137,6 +138,8 @@ function lineSimilarity(n, parsed) {
 export function nameSimilarity(name, parsed) {
   const n = norm(name);
   if (!n) return 0;
+  // Ein-/Zwei-Buchstaben-Namen ("N") nur bei exakt passender Zeile
+  if (n.length <= 2) return parsed.nameLines.some((l) => l.text === n) ? 0.9 : 0;
   let best = lineSimilarity(n, parsed);
   const base = n.replace(SUFFIX_RE, '');
   if (base !== n && base.length >= 3) best = Math.max(best, lineSimilarity(base, parsed) * 0.97);
@@ -160,6 +163,15 @@ function digitDistance(a, b) {
 }
 
 const isModernDate = (d) => !!d && d >= '2020-01';
+
+/** Copyright-Jahr gegen Erscheinungsjahr des Sets: passt -> Bonus, weit daneben -> Abzug. */
+function yearBonus(set, year) {
+  if (!year || !set?.d) return 0;
+  const diff = parseInt(set.d, 10) - year;
+  if (diff >= -1 && diff <= 1) return 12;
+  if (Math.abs(diff) >= 3) return -10;
+  return 0;
+}
 
 /**
  * @param parsed  Ergebnis von parseCard()
@@ -281,6 +293,7 @@ export async function identify(parsed, { lang = null, fallback = 'de', jaHint = 
     // keine Sprache erkannt: japanische Kandidaten je nach "Zeichensalat"-Indiz bevorzugen
     if (c.group === 'ja' && lang !== 'ja') c.score += (lang ? 0 : 6) + jaHint * 18;
     if (modern === true) c.score += isModernDate(c.set?.d) ? 12 : -12;
+    c.score += yearBonus(c.set, parsed.year);
     // neuere Sets werden häufiger gescannt – minimaler Bonus als Gleichstandsbrecher
     if (c.set?.d) c.score += Math.max(0, (parseInt(c.set.d, 10) - 1999) / 30);
   }
@@ -298,12 +311,13 @@ export async function identify(parsed, { lang = null, fallback = 'de', jaHint = 
       const dir = dirs[l];
       if (!dir) continue;
       for (const { bucket, score } of dir.search(queries, { limit: 6, min: 0.72 })) {
-        const entries = [...bucket.entries].sort((a, b) => (b.hasImage - a.hasImage) || (b.set?.d || '').localeCompare(a.set?.d || ''));
+        const rank = (e) => yearBonus(e.set, parsed.year) * 10 + (e.hasImage ? 1 : 0);
+        const entries = [...bucket.entries].sort((a, b) => rank(b) - rank(a) || (b.set?.d || '').localeCompare(a.set?.d || ''));
         for (const e of entries.slice(0, 8)) {
           const group = l === 'ja' ? 'ja' : 'intl';
           const key = `${group}:${e.setId}:${e.localId}`;
           if (cands.has(key)) continue;
-          const c = { key, group, setId: e.setId, localId: e.localId, id: `${e.setId}-${e.localId}`, set: e.set, name: e.name, hasImage: e.hasImage, score: score * 45, nameScore: score, reasons: ['name'] };
+          const c = { key, group, setId: e.setId, localId: e.localId, id: `${e.setId}-${e.localId}`, set: e.set, name: e.name, hasImage: e.hasImage, score: score * 45 + yearBonus(e.set, parsed.year), nameScore: score, reasons: ['name'] };
           cands.set(key, c);
         }
       }

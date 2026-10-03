@@ -24,7 +24,7 @@ export const langInfo = (code) => LANG[code] || LANG.en;
 // Gewicht 3 = Kartenrahmen-Begriffe (Schwäche/Resistenz/Rückzug …), 1 = häufige Fließtextwörter.
 const KEYWORDS = {
   en: {
-    3: ['weakness', 'resistance', 'retreat', 'evolves from', 'stage 1', 'stage 2', 'basic pokemon', 'supporter', 'pokemon tool', 'stadium', 'illus'],
+    3: ['weakness', 'resistance', 'retreat', 'evolves from', 'stage 1', 'stage 2', 'basic pokemon', 'supporter', 'pokemon tool', 'stadium'],
     1: ['trainer', 'damage', 'flip a coin', 'heads', 'tails', 'your opponent', 'opponents', 'this pokemon', 'attach', 'energy card', 'discard', 'your turn', 'cards', 'draw', 'search your deck', 'shuffle', 'benched', 'active pokemon', 'ability', 'once during your turn', 'you may'],
   },
   de: {

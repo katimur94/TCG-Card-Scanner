@@ -201,7 +201,11 @@ function pickCandidate(cands, lang, langSource) {
           <div class="tile-set">${esc(cardNumber(c.localId, c.set?.o))}${c.set?.d ? ` · ${esc(c.set.d.slice(0, 4))}` : ''}</div>
         </button>`;
       })
-      .join('')}</div>`);
+      .join('')}</div>
+    <div class="actions"><button class="btn btn-outline btn-span" data-action="pick-search">Alle „${esc(list[0].name)}“-Karten durchsuchen</button></div>`);
+  root.querySelector('[data-action="pick-search"]').addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('holoscan:search', { detail: list[0].name }));
+  });
   root.querySelectorAll('[data-c]').forEach((b) =>
     b.addEventListener('click', () => {
       const c = list[Number(b.dataset.c)];
