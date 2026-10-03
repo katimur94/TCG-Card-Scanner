@@ -7,7 +7,7 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 ## Funktionen
 
 - **Scannen per Kamera** mit Kartenrahmen, Taschenlampe und optionalem **Auto-Scan** (löst aus, sobald die Karte ruhig im Rahmen liegt)
-- **Foto-Import** aus der Galerie
+- **Foto-Import** aus der Galerie: Foto mit zwei Fingern zoomen, verschieben und bei Bedarf drehen, bis die Karte im Rahmen liegt – gescannt wird genau der Rahmen; das Foto bleibt zum Nachjustieren stehen
 - **Spracherkennung**: Deutsch, Englisch, Französisch, Spanisch, Italienisch, Portugiesisch und Japanisch, erkannt über
   - den aufgedruckten Sprachcode (z. B. „PAL DE“ ab Karmesin & Purpur),
   - Kartenbegriffe wie Schwäche/Weakness/Faiblesse, KP/HP/PV/PS,

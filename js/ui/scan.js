@@ -1,6 +1,7 @@
 // Scanner-Ansicht: Kamera, Auslöser, Galerie, Serienscan, Auto-Scan und Verlauf.
 
 import { Camera, AutoTrigger } from '../camera.js';
+import { PhotoAligner } from './align.js';
 import { warmup } from '../ocr.js';
 import { recognize } from '../recognize.js';
 import { LANGS, langInfo } from '../lang.js';
@@ -14,6 +15,7 @@ import { toast } from './toast.js';
 
 let camera;
 let auto;
+let aligner;
 let busy = false;
 let wantCamera = false;
 const batch = [];
@@ -86,7 +88,7 @@ export function pauseCamera() {
 }
 
 export async function resumeCamera() {
-  if (!wantCamera || camera?.active) return;
+  if (!wantCamera || camera?.active || aligner?.active) return;
   try {
     const perm = await navigator.permissions?.query({ name: 'camera' }).catch(() => null);
     if (perm && perm.state === 'denied') return;
@@ -107,14 +109,9 @@ async function autoStartIfGranted() {
 
 // ---------- Erkennung ----------
 
-async function freezeFrom(source) {
-  const c = $('#freeze');
-  if (source === 'camera') camera.snapshot(c);
-  else {
-    c.width = source.width;
-    c.height = source.height;
-    c.getContext('2d').drawImage(source, 0, 0);
-  }
+/** Kamerabild während der Auswertung einfrieren. */
+function freezeCamera() {
+  camera.snapshot($('#freeze'));
   stage().classList.add('is-frozen');
 }
 
@@ -222,32 +219,67 @@ function candidateFromCand(c) {
 
 async function capture() {
   if (busy) return;
+  if (aligner?.active) {
+    await scanAligned();
+    return;
+  }
   if (!camera?.active) {
     await startCamera();
     return;
   }
   const canvas = camera.grab($('#guide'));
   if (!canvas) return;
-  await freezeFrom('camera');
+  freezeCamera();
   await process(canvas);
 }
+
+// ---------- Foto aus der Galerie ausrichten ----------
+
+const HINT_CAMERA = 'Karte im Rahmen ausrichten';
+const HINT_ALIGN = 'Karte in den Rahmen schieben & zoomen';
 
 async function fromFile(file) {
   if (!file) return;
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(file));
-    const max = 2200;
+    // sehr große Fotos verkleinern (Speicher), Details für die Texterkennung bleiben erhalten
+    const max = 3200;
     const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
     const c = document.createElement('canvas');
     c.width = Math.round(bmp.width * scale);
     c.height = Math.round(bmp.height * scale);
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
     bmp.close?.();
-    await freezeFrom(c);
-    await process(c, { fitToText: true });
+    enterAlign(c);
   } catch (err) {
     console.error(err);
     toast('Das Bild konnte nicht gelesen werden.', { type: 'error' });
+  }
+}
+
+function enterAlign(img) {
+  pauseCamera();
+  $('#camera-intro').hidden = true;
+  stage().classList.add('is-aligning', 'is-ready');
+  $('#stage-hint').textContent = HINT_ALIGN;
+  aligner.open(img);
+  haptic(8);
+}
+
+function exitAlign() {
+  aligner.close();
+  stage().classList.remove('is-aligning', 'is-ready');
+  $('#stage-hint').textContent = HINT_CAMERA;
+  if (wantCamera) resumeCamera();
+  else $('#camera-intro').hidden = false;
+}
+
+async function scanAligned() {
+  aligner.locked = true;
+  try {
+    await process(aligner.crop(), { fitToText: false });
+  } finally {
+    aligner.locked = false;
   }
 }
 
@@ -454,6 +486,7 @@ export async function openHistory() {
 
 export function initScan() {
   camera = new Camera($('#video'));
+  aligner = new PhotoAligner($('#align-layer'), $('#align-canvas'), $('#guide'));
   auto = new AutoTrigger(camera, $('#guide'), {
     onProgress: (p) => {
       $('#guide').style.setProperty('--p', p);
@@ -495,6 +528,13 @@ export function initScan() {
           toast(settings.autoScan ? 'Auto-Scan an: löst aus, sobald die Karte ruhig im Rahmen liegt.' : 'Auto-Scan aus');
         });
         haptic(8);
+        break;
+      case 'align-close':
+        exitAlign();
+        break;
+      case 'align-rotate':
+        aligner.rotate();
+        haptic(6);
         break;
       case 'pick-scan-lang':
         pickScanLang();

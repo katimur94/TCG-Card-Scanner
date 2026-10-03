@@ -48,6 +48,7 @@
         <div class="stage" id="stage">
           <video id="video" playsinline muted autoplay></video>
           <canvas id="freeze" class="freeze" aria-hidden="true"></canvas>
+          <div class="align-layer" id="align-layer" hidden><canvas id="align-canvas"></canvas></div>
 
           <div class="stage-mask" aria-hidden="true">
             <div class="guide" id="guide">
@@ -64,7 +65,11 @@
               <svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="14" rx="2"/><path d="M8 3h11a2 2 0 0 1 2 2v12"/></svg>
               <span>Serienscan</span>
             </button>
-            <button class="chip chip-glass" data-action="toggle-auto" id="btn-auto" aria-pressed="false">
+            <button class="chip chip-glass align-only" data-action="align-close">
+              <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              <span>Schließen</span>
+            </button>
+            <button class="chip chip-glass cam-only" data-action="toggle-auto" id="btn-auto" aria-pressed="false">
               <svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
               <span>Auto</span>
             </button>
@@ -96,7 +101,10 @@
               <span class="shutter-ring"></span>
               <span class="shutter-core"></span>
             </button>
-            <button class="round-btn" data-action="toggle-torch" id="btn-torch" aria-label="Taschenlampe" disabled>
+            <button class="round-btn align-only" data-action="align-rotate" aria-label="Foto um 90° drehen">
+              <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></svg>
+            </button>
+            <button class="round-btn cam-only" data-action="toggle-torch" id="btn-torch" aria-label="Taschenlampe" disabled>
               <svg viewBox="0 0 24 24"><path d="M9 2h6l-1 6h-4z"/><path d="M10 8h4v5l-1 9h-2l-1-9z"/></svg>
             </button>
           </div>

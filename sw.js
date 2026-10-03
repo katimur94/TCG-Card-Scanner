@@ -30,6 +30,7 @@ const SHELL = [
   'js/ui/sheet.js',
   'js/ui/toast.js',
   'js/ui/holo.js',
+  'js/ui/align.js',
   'js/ui/charts.js',
   'js/ui/result.js',
   'js/ui/scan.js',

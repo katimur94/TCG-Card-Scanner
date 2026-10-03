@@ -970,6 +970,50 @@ svg {
   animation: beam 2.2s ease-in-out infinite alternate;
 }
 
+/* ---------- Foto ausrichten ---------- */
+.align-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  touch-action: none;
+  cursor: grab;
+  background: #05040b;
+}
+
+.align-layer:active {
+  cursor: grabbing;
+}
+
+.align-layer canvas {
+  display: block;
+}
+
+.stage:not(.is-aligning) .align-only,
+.stage.is-aligning .cam-only {
+  display: none !important;
+}
+
+.stage.is-aligning .stage-mask {
+  z-index: 2;
+}
+
+.stage.is-aligning .guide .c {
+  animation: none;
+}
+
+.stage.is-aligning .guide {
+  box-shadow: 0 0 0 200vmax rgba(5, 4, 12, 0.72);
+}
+
+.stage.is-aligning .guide::after {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.stage-hint {
+  max-width: calc(100% - 32px);
+  text-align: center;
+}
+
 /* ---------- Serienscan ---------- */
 .batch-tray {
   position: absolute;
