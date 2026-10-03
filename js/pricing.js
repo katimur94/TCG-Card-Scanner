@@ -1,15 +1,36 @@
 // Varianten, Preisfelder (Cardmarket-Preisguide via TCGdex) und Cardmarket-Links.
 
+import { settings } from './store.js';
+
+// Cardmarket-Zustände (IDs = Filter "minCondition"), Farben angelehnt an Cardmarket
 export const CONDITIONS = [
-  { id: 1, short: 'MT', label: 'Mint' },
-  { id: 2, short: 'NM', label: 'Near Mint' },
-  { id: 3, short: 'EX', label: 'Excellent' },
-  { id: 4, short: 'GD', label: 'Good' },
-  { id: 5, short: 'LP', label: 'Light Played' },
-  { id: 6, short: 'PL', label: 'Played' },
-  { id: 7, short: 'PO', label: 'Poor' },
+  { id: 1, short: 'MT', label: 'Mint', color: '#1f9fb4' },
+  { id: 2, short: 'NM', label: 'Near Mint', color: '#2e9e4f' },
+  { id: 3, short: 'EX', label: 'Excellent', color: '#8c9a1d' },
+  { id: 4, short: 'GD', label: 'Good', color: '#c39a1b' },
+  { id: 5, short: 'LP', label: 'Light Played', color: '#d9772b' },
+  { id: 6, short: 'PL', label: 'Played', color: '#d24b3e' },
+  { id: 7, short: 'PO', label: 'Poor', color: '#a3263a' },
 ];
 export const conditionInfo = (id) => CONDITIONS.find((c) => c.id === Number(id)) || CONDITIONS[1];
+
+/**
+ * Richtwerte je Zustand relativ zum Cardmarket-Preistrend (= Near Mint).
+ * Cardmarket veröffentlicht keine Preise je Zustand – das sind übliche Abschläge, in "Mehr" anpassbar.
+ */
+export const DEFAULT_CONDITION_FACTORS = { 1: 1, 2: 1, 3: 0.85, 4: 0.7, 5: 0.6, 6: 0.45, 7: 0.25 };
+
+export function conditionFactor(id) {
+  const custom = settings.conditionFactors?.[Number(id)];
+  if (typeof custom === 'number' && custom > 0) return custom;
+  return DEFAULT_CONDITION_FACTORS[Number(id)] ?? 1;
+}
+
+/** Geschätzter Preis einer Karte im angegebenen Zustand (Basis: Preistrend der Variante). */
+export function conditionValue(base, id) {
+  if (base == null || !(base > 0)) return null;
+  return Math.round(base * conditionFactor(id || 2) * 100) / 100;
+}
 
 const FOILS = { pokeball: 'Pokéball', masterball: 'Meisterball', energy: 'Energie-Symbol', cosmos: 'Cosmos', cracked_ice: 'Cracked Ice' };
 const SUBTYPES = { shadowless: 'Shadowless', unlimited: 'Unlimited', '1999-2000-copyright': '© 1999–2000' };

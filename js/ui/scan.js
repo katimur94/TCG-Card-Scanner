@@ -4,6 +4,7 @@ import { Camera, AutoTrigger } from '../camera.js';
 import { warmup } from '../ocr.js';
 import { recognize } from '../recognize.js';
 import { LANGS, langInfo } from '../lang.js';
+import { conditionInfo, conditionValue, conditionFactor } from '../pricing.js';
 import { findSet, guessImage } from '../api.js';
 import { settings, saveSettings, addHistory, allHistory, clearHistory, addItem } from '../store.js';
 import { $, esc, money, haptic, relTime } from '../util.js';
@@ -276,11 +277,12 @@ async function addToBatch(cand, lang, unsure = false) {
   addHistory({ ...candidateFromCand(cand), lang, name: entry.name, setName: entry.setName, image: entry.image, price: value, variantLabel: entry.variantLabel });
   renderBatch(true);
   haptic([10, 30, 10]);
-  toast(`${unsure ? 'Unsicher: ' : ''}${entry.name} · ${langInfo(lang).short}`, { type: unsure ? 'info' : 'success', image: entry.image ? `${entry.image}/low.webp` : undefined, price: value ? money(value) : '–', ms: unsure ? 3500 : 2200 });
+  const shown = conditionValue(value, settings.condition);
+  toast(`${unsure ? 'Unsicher: ' : ''}${entry.name} · ${langInfo(lang).short}`, { type: unsure ? 'info' : 'success', image: entry.image ? `${entry.image}/low.webp` : undefined, price: shown ? money(shown) : '–', ms: unsure ? 3500 : 2200 });
 }
 
 function batchTotal() {
-  return batch.reduce((s, e) => s + (e.value || 0), 0);
+  return batch.reduce((s, e) => s + (conditionValue(e.value, settings.condition) || 0), 0);
 }
 
 function renderBatch(pulse = false) {
@@ -304,7 +306,7 @@ function reviewBatch() {
     <div class="price-hero" style="margin-top:0">
       <div class="price-label"><span class="cm-logo"><i></i>Gesamtwert (Cardmarket)</span><span>${batch.length} Karten</span></div>
       <div class="price-main"><span class="price-value">${money(batchTotal())}</span></div>
-      <div class="price-caption">Summe der Preistrends der jeweils ersten Variante.</div>
+      <div class="price-caption">Zustand ${esc(conditionInfo(settings.condition).short)}${conditionFactor(settings.condition) !== 1 ? ' (Richtwert)' : ''} · Basis: Preistrend der ersten Variante.</div>
     </div>
     <div class="hist-list" style="margin-top:14px">
       ${
@@ -318,7 +320,7 @@ function reviewBatch() {
             <div class="row-title">${esc(e.name)}</div>
             <div class="row-sub">${esc(e.setName)} · ${esc(e.cand.localId)} · ${langInfo(e.lang).flag} ${esc(e.variantLabel || '')}</div>
           </button>
-          <div class="hist-price">${money(e.value)}</div>
+          <div class="hist-price">${money(conditionValue(e.value, settings.condition))}</div>
           <button class="icon-btn" data-del="${i}" aria-label="Entfernen" style="width:36px;height:36px"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         </div>`,
               )

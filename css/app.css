@@ -1572,6 +1572,114 @@ svg {
   border-top: 1px dashed var(--border);
 }
 
+/* Zustandstabelle */
+.cond-list {
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.cond-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+
+.cond-row:last-child {
+  border-bottom: 0;
+}
+
+.cond-row.is-active {
+  background: linear-gradient(90deg, rgba(245, 196, 81, 0.13), rgba(245, 196, 81, 0.03));
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+.cond-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 4px 8px 12px;
+  text-align: left;
+}
+
+.cond-badge {
+  flex: none;
+  min-width: 38px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 24px;
+  text-align: center;
+  color: #fff;
+  background: var(--c, #555);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.cond-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-weight: 650;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.cond-name small {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.cond-price {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cond-row.is-active .cond-price {
+  color: var(--gold-hi);
+}
+
+.cond-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: transform 0.15s var(--ease-out), background 0.2s;
+}
+
+.cond-link:active {
+  transform: scale(0.95);
+}
+
+.cond-link svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Skeleton */
 .skel {
   border-radius: 10px;
@@ -1814,6 +1922,18 @@ svg {
   -webkit-backdrop-filter: blur(6px);
 }
 
+.cond-mini {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 16px;
+  vertical-align: 1px;
+  color: #fff;
+  background: var(--c, #555);
+}
+
 .tile-name {
   margin-top: 8px;
   font-weight: 650;
@@ -2050,6 +2170,34 @@ svg {
 
 .row .select::after {
   right: 11px;
+}
+
+.pct-input {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.pct-input input {
+  width: 46px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.pct-input span {
+  color: var(--text-3);
+  font-weight: 600;
 }
 
 .switch {

@@ -14,6 +14,7 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
   - den gelesenen Kartennamen (z. B. „Enigmara“ → Deutsch).
 - **Cardmarket-Preise** aus dem offiziellen Preisguide: Preistrend, Ab-Preis, Ø Verkaufspreis, Ø 1/7/30 Tage und die Tendenz (7 gegenüber 30 Tagen)
 - **Varianten** mit eigenem Preis: Normal, Holo, Reverse Holo, Pokéball- und Meisterball-Muster, 1. Edition …
+- **Preis nach Zustand** für alle Cardmarket-Zustände (MT, NM, EX, GD, LP, PL, PO): Richtwert je Zustand (Preistrend = NM, übliche Abschläge, in „Mehr“ anpassbar) und je Zustand ein Direktlink zu den echten Cardmarket-Angeboten – gefiltert auf Kartensprache und Zustand, günstigstes zuerst
 - **Sprachgerechte Cardmarket-Links**: öffnet das Produkt direkt mit Filter auf die Kartensprache und den gewünschten Mindestzustand
 - **Japanische Karten** werden als eigene Cardmarket-Produkte mit eigenem Preis erkannt
 - **Serienscan**: Karten nacheinander scannen, der Gesamtwert des Stapels wird live summiert
@@ -34,6 +35,8 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 2. Gelesen werden die ganze Karte, die Namensleiste und – vergrößert – der untere Rand mit Kartennummer (z. B. `025/165`) und Set-Kürzel.
 3. Ein Offline-Kartenindex (`data/`) ordnet Nummer, Gesamtzahl, Set-Kürzel und Namen einer Karte zu. Dabei werden einzelne falsch gelesene Ziffern toleriert und anhand des Namens geprüft.
 4. Preise und Kartendetails kommen live von [TCGdex](https://tcgdex.dev), das den Cardmarket-Preisguide täglich übernimmt.
+
+Hinweis zu Zuständen: Cardmarket veröffentlicht nur den Preisguide (Trend, Ab-Preis, Durchschnitte) und keine Preise je Zustand; die einzelnen Angebote sind nicht frei abrufbar. Die Zustandspreise in HoloScan sind deshalb Richtwerte, die echten Angebote öffnet der Link der jeweiligen Zeile. Der Sammlungswert rechnet mit dem Zustand jeder Karte.
 
 Hinweis zur Sprache: Bei Cardmarket teilen sich die europäischen Sprachversionen einer Karte ein Produkt, der Preisguide gilt also sprachübergreifend. Deshalb öffnet HoloScan die Cardmarket-Seite gefiltert auf die erkannte Sprache. Japanische Karten sind eigene Produkte mit eigenem Preis.
 

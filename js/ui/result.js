@@ -2,7 +2,7 @@
 
 import { getCard, imageUrl, guessImage, loadSets } from '../api.js';
 import { LANGS, LANG, langInfo } from '../lang.js';
-import { variantsOf, momentum, cardmarketUrl, CONDITIONS, conditionInfo } from '../pricing.js';
+import { variantsOf, momentum, cardmarketUrl, CONDITIONS, conditionInfo, conditionFactor, conditionValue } from '../pricing.js';
 import { settings, addItem, updateItem, removeItem, recordPrice, priceHistory, priceKey, emit } from '../store.js';
 import { db } from '../db.js';
 import { esc, money, percent, date, haptic } from '../util.js';
@@ -106,6 +106,23 @@ export function cardNumber(localId, official) {
   return `${lid}/${pre}${String(official).padStart(digits.length >= 3 ? 3 : pre ? digits.length : 0, '0')}`;
 }
 
+/** Zeile der Zustandstabelle: Auswahl + Richtwert + Link zu den echten Angeboten. */
+function conditionRow(c, base, selected, link) {
+  const f = conditionFactor(c.id);
+  const est = conditionValue(base, c.id);
+  const pct = Math.round((f - 1) * 100);
+  const hint = c.id === 2 ? '= Preistrend' : f === 1 ? 'wie NM' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)} %`;
+  return `
+    <div class="cond-row ${c.id === selected ? 'is-active' : ''}">
+      <button class="cond-main" data-cond="${c.id}" aria-pressed="${c.id === selected}">
+        <span class="cond-badge" style="--c:${c.color}">${esc(c.short)}</span>
+        <span class="cond-name">${esc(c.label)}<small>${esc(hint)}</small></span>
+        <span class="cond-price">${est ? `${c.id === 2 ? '' : '≈ '}${money(est)}` : '–'}</span>
+      </button>
+      <a class="cond-link" href="${esc(link)}" target="_blank" rel="noopener" aria-label="Angebote ab ${esc(c.label)} auf Cardmarket">Angebote ${ICON.ext}</a>
+    </div>`;
+}
+
 function statCell(k, v, unit) {
   return `<div class="stat"><div class="stat-k">${k}</div><div class="stat-v">${money(v, unit)}</div></div>`;
 }
@@ -123,19 +140,21 @@ function render(state) {
   const [img, imgFb] = cardImages(data, cand);
   const setSymbol = set.symbol ? `${set.symbol}.webp` : null;
   const legalStd = p.legal?.standard;
-  const cmLink = cardmarketUrl({
-    idProduct: cm?.idProduct,
-    siteLang: settings.siteLang,
-    cmLang: li.cm,
-    minCondition: condition,
-    reverse: v?.reverse,
-    firstEd: v?.firstEd,
-    search: p.name || d.name,
-  });
+  const linkFor = (minCondition) =>
+    cardmarketUrl({
+      idProduct: cm?.idProduct,
+      siteLang: settings.siteLang,
+      cmLang: li.cm,
+      minCondition,
+      reverse: v?.reverse,
+      firstEd: v?.firstEd,
+      search: p.name || d.name,
+    });
+  const cmLink = linkFor(condition);
   const isJa = cand.group === 'ja';
   const langNote = isJa
-    ? 'Japanische Karten sind bei Cardmarket <b>eigene Produkte</b> – der Preis oben gilt für die japanische Ausgabe.'
-    : `Der Cardmarket-Preisguide fasst alle europäischen Sprachversionen dieses Produkts zusammen. Der Link unten zeigt nur Angebote auf <b>${esc(li.label)}</b>${condition ? ` ab <b>${esc(conditionInfo(condition).label)}</b>` : ''}.`;
+    ? 'Japanische Karten sind bei Cardmarket <b>eigene Produkte</b> – die Preise gelten für die japanische Ausgabe.'
+    : `Der Cardmarket-Preisguide fasst alle europäischen Sprachversionen zusammen. Die Angebots-Links zeigen nur Karten auf <b>${esc(li.label)}</b>, günstigstes zuerst.`;
 
   const conf = state.confidence;
   const confHtml =
@@ -205,15 +224,18 @@ function render(state) {
     ${hist && hist.length >= 2 ? `<div class="section"><div class="section-title"><span>Dein Preisverlauf</span><span style="text-transform:none;letter-spacing:0">${hist.length} Abrufe</span></div>${historyChart(hist)}</div>` : ''}
 
     <div class="section">
-      <div class="section-title"><span>Cardmarket-Angebote</span></div>
-      <div class="note">${langNote}</div>
-      <div class="chip-row" style="margin-top:10px">
-        ${CONDITIONS.map((c) => `<button class="chip chip-soft ${c.id === Number(condition) ? 'is-active' : ''}" data-cond="${c.id}" title="${esc(c.label)}">ab ${esc(c.short)}</button>`).join('')}
+      <div class="section-title"><span>Preis nach Zustand</span><span style="text-transform:none;letter-spacing:0;font-weight:600">${esc(v?.label || '')}</span></div>
+      <div class="cond-list">
+        ${CONDITIONS.map((c) => conditionRow(c, cm?.value, Number(condition), linkFor(c.id))).join('')}
+      </div>
+      <div class="note" style="margin-top:10px">
+        <b>Richtwerte</b> aus dem Cardmarket-Preistrend mit üblichen Abschlägen je Zustand (anpassbar unter „Mehr“) – Cardmarket veröffentlicht keine Preise je Zustand.
+        Die echten Angebote öffnest du mit „Angebote“ in der jeweiligen Zeile. ${langNote}
       </div>
     </div>
 
     <div class="actions">
-      <a class="btn btn-gold btn-span" href="${esc(cmLink)}" target="_blank" rel="noopener">${ICON.ext} Auf Cardmarket ansehen (${esc(li.short)})</a>
+      <a class="btn btn-gold btn-span" href="${esc(cmLink)}" target="_blank" rel="noopener">${ICON.ext} Auf Cardmarket ansehen (${esc(li.short)} · ab ${esc(conditionInfo(condition).short)})</a>
       ${
         item
           ? ''
@@ -441,13 +463,23 @@ function bind(container, state) {
     }),
   );
 
+  const repaint = () => {
+    const scroll = sheetBody().scrollTop;
+    paint(container, state);
+    sheetBody().scrollTop = scroll;
+  };
+
+  // Zustand wählen: gilt für "Zur Sammlung", den Hauptlink und – bei gespeicherten Karten – den Eintrag selbst
   container.querySelectorAll('[data-cond]').forEach((b) =>
-    b.addEventListener('click', () => {
+    b.addEventListener('click', async () => {
       state.condition = Number(b.dataset.cond);
       haptic(6);
-      const scroll = sheetBody().scrollTop;
-      paint(container, state);
-      sheetBody().scrollTop = scroll;
+      if (state.item && Number(state.item.condition) !== state.condition) {
+        state.item.condition = state.condition;
+        await updateItem(state.item.uid, { condition: state.condition });
+        toast(`Zustand gespeichert: ${conditionInfo(state.condition).label}`, { type: 'success', ms: 1800 });
+      }
+      repaint();
     }),
   );
 
@@ -497,7 +529,9 @@ function bind(container, state) {
     const v = currentVariant(state);
     const li = langInfo(state.lang);
     const url = cardmarketUrl({ idProduct: v?.cm?.idProduct, siteLang: settings.siteLang, cmLang: li.cm, search: d.name });
-    const text = `${d.name} · ${d.set?.name || ''} ${d.localId} (${li.short}, ${v?.label || ''})\nCardmarket ${v?.cm?.valueLabel || 'Preis'}: ${money(v?.cm?.value)}`;
+    const cond = conditionInfo(state.condition);
+    const est = conditionValue(v?.cm?.value, cond.id);
+    const text = `${d.name} · ${d.set?.name || ''} ${d.localId} (${li.short}, ${v?.label || ''})\nCardmarket ${v?.cm?.valueLabel || 'Preis'}: ${money(v?.cm?.value)}${cond.id !== 2 && est ? `\nZustand ${cond.short}: ≈ ${money(est)} (geschätzt)` : ''}`;
     try {
       if (navigator.share) await navigator.share({ title: d.name, text, url });
       else {
@@ -547,6 +581,7 @@ function bind(container, state) {
       state.item.condition = Number(e.target.value);
       state.condition = state.item.condition;
       await updateItem(state.item.uid, { condition: state.item.condition });
+      repaint();
     });
     const num = (v) => (v === '' ? null : Math.max(0, parseFloat(String(v).replace(',', '.'))));
     container.querySelector('#item-buy')?.addEventListener('change', (e) => updateItem(state.item.uid, { buyPrice: num(e.target.value) }));

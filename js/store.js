@@ -13,6 +13,7 @@ const DEFAULTS = {
   autoScan: false,
   batch: false,
   showUSD: true,
+  conditionFactors: null, // eigene Abschläge je Zustand {id: Faktor}, sonst Standard
 };
 
 export const settings = { ...DEFAULTS };

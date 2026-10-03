@@ -2,7 +2,7 @@
 
 import { allItems, on, settings, updateItem, recordPortfolio, portfolioHistory, recordPrice, priceKey, replaceAllItems, addItem } from '../store.js';
 import { getCard, findSet } from '../api.js';
-import { variantsOf, conditionInfo, cardmarketUrl } from '../pricing.js';
+import { variantsOf, conditionInfo, cardmarketUrl, conditionValue, conditionFactor } from '../pricing.js';
 import { LANGS, langInfo } from '../lang.js';
 import { $, esc, money, percent, date, haptic, download } from '../util.js';
 import { showCard, candidateFromItem, cardNumber } from './result.js';
@@ -14,7 +14,9 @@ import { db } from '../db.js';
 let list = 'collection';
 let refreshing = false;
 
-const value = (i) => (i.price || 0) * (i.qty || 1);
+// Wert je Karte im gespeicherten Zustand (Richtwert aus dem Preistrend)
+const unit = (i) => conditionValue(i.price, i.condition) || 0;
+const value = (i) => unit(i) * (i.qty || 1);
 
 function sortItems(items, mode) {
   const by = {
@@ -36,11 +38,12 @@ async function renderPortfolio(items) {
   const coll = items.filter((i) => i.list === 'collection');
   const total = coll.reduce((s, i) => s + value(i), 0);
   const count = coll.reduce((s, i) => s + (i.qty || 1), 0);
-  const base = coll.reduce((s, i) => s + (i.addedPrice != null && i.price != null ? i.addedPrice * (i.qty || 1) : 0), 0);
-  const cur = coll.reduce((s, i) => s + (i.addedPrice != null && i.price != null ? i.price * (i.qty || 1) : 0), 0);
+  const base = coll.reduce((s, i) => s + (i.addedPrice != null && i.price != null ? (conditionValue(i.addedPrice, i.condition) || 0) * (i.qty || 1) : 0), 0);
+  const cur = coll.reduce((s, i) => s + (i.addedPrice != null && i.price != null ? value(i) : 0), 0);
   const delta = cur - base;
   const buy = coll.reduce((s, i) => s + (i.buyPrice != null ? i.buyPrice * (i.qty || 1) : 0), 0);
-  const buyCur = coll.reduce((s, i) => s + (i.buyPrice != null ? (i.price || 0) * (i.qty || 1) : 0), 0);
+  const buyCur = coll.reduce((s, i) => s + (i.buyPrice != null ? value(i) : 0), 0);
+  const estimated = coll.some((i) => conditionFactor(i.condition) !== 1);
   const hist = coll.length ? await recordPortfolio(Math.round(total * 100) / 100, count) : await portfolioHistory();
   const top = [...coll].sort((a, b) => value(b) - value(a))[0];
   const last = coll.reduce((m, i) => Math.max(m, i.checkedAt || 0), 0);
@@ -54,7 +57,8 @@ async function renderPortfolio(items) {
     </div>
     ${buy ? `<div class="portfolio-row" style="margin-top:6px"><span>Einkauf ${money(buy)} → Gewinn <b style="color:${buyCur - buy >= 0 ? 'var(--green)' : 'var(--red)'}">${money(buyCur - buy)}</b></span></div>` : ''}
     ${hist.length >= 2 ? `<div class="portfolio-chart">${historyChart(hist)}</div>` : ''}
-    ${top ? `<div class="portfolio-row" style="margin-top:10px"><span>Wertvollste Karte: <b style="color:var(--text)">${esc(top.name)}</b> · ${money(top.price)}</span></div>` : ''}
+    ${top ? `<div class="portfolio-row" style="margin-top:10px"><span>Wertvollste Karte: <b style="color:var(--text)">${esc(top.name)}</b> · ${money(unit(top))}</span></div>` : ''}
+    ${estimated ? '<div class="portfolio-row" style="margin-top:6px;font-size:12px;color:var(--text-3)">Werte nach Zustand jeder Karte – unter NM als Richtwert geschätzt.</div>' : ''}
     <div class="portfolio-actions">
       <button class="btn btn-small" data-action="refresh-prices">↻ Preise aktualisieren</button>
       <button class="btn btn-small" data-action="export">Exportieren</button>
@@ -65,7 +69,8 @@ async function renderPortfolio(items) {
 function tile(i, idx) {
   const li = langInfo(i.lang);
   const ch = change(i);
-  const hit = i.list === 'wish' && i.target && i.price && i.price <= i.target;
+  const hit = i.list === 'wish' && i.target && unit(i) && unit(i) <= i.target;
+  const cond = conditionInfo(i.condition);
   const img = i.image ? `${i.image}/low.webp` : null;
   return `
     <button class="tile ${hit ? 'is-hit' : ''}" data-uid="${esc(i.uid)}" style="animation-delay:${Math.min(idx, 12) * 30}ms">
@@ -73,12 +78,12 @@ function tile(i, idx) {
         ${img ? `<img src="${esc(img)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
         ${i.qty > 1 ? `<span class="qty">${i.qty}×</span>` : ''}
         ${i.list === 'wish' && i.target ? '<span class="alarm" title="Preisalarm"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/></svg></span>' : ''}
-        <span class="lang-badge">${li.flag} ${esc(li.short)}</span>
+        <span class="lang-badge">${li.flag} ${esc(li.short)} <span class="cond-mini" style="--c:${cond.color}">${esc(cond.short)}</span></span>
       </div>
       <div class="tile-name">${esc(i.name)}</div>
       <div class="tile-set">${esc(i.setName || '')} · ${esc(cardNumber(i.localId, i.official))}</div>
       <div class="tile-price">
-        <b>${money(i.price)}</b>
+        <b>${conditionFactor(i.condition) !== 1 && unit(i) ? '≈ ' : ''}${money(unit(i) || null)}</b>
         ${i.list === 'wish' && i.target ? `<small class="${hit ? 'up' : ''}">Ziel ${money(i.target)}</small>` : ch ? `<small class="${ch > 0 ? 'up' : 'down'}">${percent(ch)}</small>` : ''}
       </div>
     </button>`;
@@ -142,8 +147,9 @@ export async function refreshPrices({ silent = false } = {}) {
           const price = v?.cm?.value ?? it.price;
           await updateItem(it.uid, { price, priceUpdated: v?.cm?.updated || it.priceUpdated, checkedAt: Date.now(), idProduct: v?.cm?.idProduct || it.idProduct });
           if (price) await recordPrice(priceKey(it.group, it.id, v?.key || it.variantKey), price);
-          if (it.list === 'wish' && it.target && price && price <= it.target && !(it.alarmedAt && it.alarmedPrice === price)) {
-            alarms.push({ ...it, price });
+          const condPrice = conditionValue(price, it.condition);
+          if (it.list === 'wish' && it.target && condPrice && condPrice <= it.target && !(it.alarmedAt && it.alarmedPrice === price)) {
+            alarms.push({ ...it, price, condPrice });
             await updateItem(it.uid, { alarmedAt: Date.now(), alarmedPrice: price });
           }
         }
@@ -162,12 +168,12 @@ export async function refreshPrices({ silent = false } = {}) {
     toast(failed ? `${done} aktualisiert, ${failed} fehlgeschlagen` : `${done} ${done === 1 ? 'Preis' : 'Preise'} aktualisiert`, { type: failed ? 'error' : 'success' });
   }
   for (const a of alarms.slice(0, 3)) {
-    toast(`Preisalarm: ${a.name} jetzt ${money(a.price)}`, { type: 'success', ms: 6000, image: a.image ? `${a.image}/low.webp` : undefined });
+    toast(`Preisalarm: ${a.name} (${conditionInfo(a.condition).short}) jetzt ${money(a.condPrice)}`, { type: 'success', ms: 6000, image: a.image ? `${a.image}/low.webp` : undefined });
   }
   if (alarms.length && 'Notification' in window && Notification.permission === 'granted') {
     try {
       const reg = await navigator.serviceWorker?.getRegistration();
-      const body = alarms.map((a) => `${a.name}: ${money(a.price)} (Ziel ${money(a.target)})`).join('\n');
+      const body = alarms.map((a) => `${a.name} (${conditionInfo(a.condition).short}): ${money(a.condPrice)} (Ziel ${money(a.target)})`).join('\n');
       if (reg) reg.showNotification('HoloScan Preisalarm', { body, icon: 'assets/icons/icon-192.png', badge: 'assets/icons/favicon-32.png' });
     } catch {
       /* optional */
@@ -189,7 +195,7 @@ function csvCell(v) {
 
 export async function exportCSV() {
   const items = await allItems();
-  const head = ['Liste', 'Name', 'Set', 'Nummer', 'Sprache', 'Variante', 'Zustand', 'Anzahl', 'Preis (EUR)', 'Gesamt (EUR)', 'Einkaufspreis (EUR)', 'Preisalarm (EUR)', 'Hinzugefügt', 'Cardmarket'];
+  const head = ['Liste', 'Name', 'Set', 'Nummer', 'Sprache', 'Variante', 'Zustand', 'Anzahl', 'Preistrend (EUR)', 'Preis im Zustand (EUR, Richtwert)', 'Gesamt (EUR)', 'Einkaufspreis (EUR)', 'Preisalarm (EUR)', 'Hinzugefügt', 'Cardmarket'];
   const num = (v) => (v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ','));
   const rows = items.map((i) => [
     i.list === 'wish' ? 'Merkliste' : 'Sammlung',
@@ -201,11 +207,12 @@ export async function exportCSV() {
     conditionInfo(i.condition).short,
     i.qty || 1,
     num(i.price),
+    num(unit(i) || null),
     num(value(i)),
     num(i.buyPrice),
     num(i.target),
     date(i.addedAt),
-    cardmarketUrl({ idProduct: i.idProduct, siteLang: settings.siteLang, cmLang: langInfo(i.lang).cm, search: i.name }),
+    cardmarketUrl({ idProduct: i.idProduct, siteLang: settings.siteLang, cmLang: langInfo(i.lang).cm, minCondition: i.condition, search: i.name }),
   ]);
   const csv = '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n');
   download(`holoscan-sammlung-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
