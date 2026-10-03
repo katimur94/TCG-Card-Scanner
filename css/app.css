@@ -1263,6 +1263,7 @@ svg {
 }
 
 .img-badge {
+  display: none;
   position: absolute;
   left: 6px;
   bottom: 6px;
@@ -2158,6 +2159,11 @@ svg {
 .cond-link svg {
   width: 14px;
   height: 14px;
+}
+
+.holo-card[data-imgkind='scan'] .img-badge.b-scan,
+.holo-card[data-imgkind='alt'] .img-badge.b-alt {
+  display: block;
 }
 
 /* Skeleton */

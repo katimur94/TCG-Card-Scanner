@@ -9,7 +9,7 @@ import { conditionInfo, conditionValue, conditionFactor } from '../pricing.js';
 import { findSet, guessImage } from '../api.js';
 import { settings, saveSettings, addHistory, allHistory, clearHistory, addItem } from '../store.js';
 import { $, esc, money, haptic, relTime } from '../util.js';
-import { showCard, loadCardData, bestValue, candidateFromItem, cardNumber, imgTag, storedImage } from './result.js';
+import { showCard, loadCardData, bestValue, candidateFromItem, cardNumber, imgTag, imageFields, thumbOf } from './result.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { toast } from './toast.js';
 
@@ -132,6 +132,8 @@ async function process(canvas, { fitToText = false } = {}) {
     window.__holoscanLast = result;
     console.debug('[HoloScan]', result);
     const { cands, best, cardLang, langSource, parsed } = result;
+    // eigenes Foto der Karte – wird gezeigt, wenn es in der Datenbank kein Bild gibt
+    const scanImage = scanThumb(canvas);
 
     if (!best) {
       haptic([30, 60, 30]);
@@ -147,13 +149,13 @@ async function process(canvas, { fitToText = false } = {}) {
     const unsure = best.confidence < 0.45 && cands.length > 1;
     if (settings.batch) {
       setStatus('Preis wird geladen …');
-      await addToBatch(best, cardLang, unsure);
+      await addToBatch(best, cardLang, unsure, scanImage);
     } else if (unsure) {
       haptic([12, 40, 12]);
-      pickCandidate(cands, cardLang, langSource);
+      pickCandidate(cands, cardLang, langSource, scanImage);
     } else {
       haptic([12, 40, 12]);
-      openScanResult(best, cands.filter((c) => c !== best), cardLang, langSource, best.confidence);
+      openScanResult(best, cands.filter((c) => c !== best), cardLang, langSource, best.confidence, scanImage);
     }
   } catch (err) {
     console.error(err);
@@ -166,8 +168,33 @@ async function process(canvas, { fitToText = false } = {}) {
   }
 }
 
-function openScanResult(cand, alternatives, lang, langSource, confidence = null) {
+/**
+ * Kleines JPEG des gescannten Kartenausschnitts (ohne den 4-%-Rand für die Texterkennung).
+ * @returns {string|null} Data-URL
+ */
+function scanThumb(canvas, width = 360, margin = 0.04) {
+  try {
+    const f = margin / (1 + 2 * margin);
+    const sx = canvas.width * f;
+    const sy = canvas.height * f;
+    const sw = canvas.width - 2 * sx;
+    const sh = canvas.height - 2 * sy;
+    const w = Math.round(Math.min(width, sw));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = Math.round((sh * w) / sw);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.82);
+  } catch {
+    return null;
+  }
+}
+
+function openScanResult(cand, alternatives, lang, langSource, confidence = null, scanImage = null) {
   showCard({
+    scanImage,
     candidate: cand,
     alternatives,
     lang,
@@ -176,13 +203,13 @@ function openScanResult(cand, alternatives, lang, langSource, confidence = null)
     source: 'scan',
     onLoaded: (data, st) => {
       const { variant, value } = bestValue(data, st.variantKey);
-      addHistory({ ...candidateFromCand(cand), lang: st.lang, name: data.display.name, setName: data.display.set?.name || cand.set?.n, image: storedImage(data), price: value, variantLabel: variant?.label });
+      addHistory({ ...candidateFromCand(cand), lang: st.lang, name: data.display.name, setName: data.display.set?.name || cand.set?.n, ...imageFields(data, st.scanImage), price: value, variantLabel: variant?.label });
     },
   });
 }
 
 /** Mehrere Karten kommen infrage (z. B. nur der Name war lesbar): Auswahl anzeigen. */
-function pickCandidate(cands, lang, langSource) {
+function pickCandidate(cands, lang, langSource, scanImage = null) {
   const list = cands.slice(0, 12);
   const root = openSheet(`
     <h3 class="sheet-title">Welche Karte ist es?</h3>
@@ -208,7 +235,7 @@ function pickCandidate(cands, lang, langSource) {
     b.addEventListener('click', () => {
       const c = list[Number(b.dataset.c)];
       haptic(8);
-      openScanResult(c, list.filter((x) => x !== c), c.group === 'ja' ? 'ja' : lang, langSource, null);
+      openScanResult(c, list.filter((x) => x !== c), c.group === 'ja' ? 'ja' : lang, langSource, null, scanImage);
     }),
   );
 }
@@ -285,7 +312,7 @@ async function scanAligned() {
 
 // ---------- Serienscan ----------
 
-async function addToBatch(cand, lang, unsure = false) {
+async function addToBatch(cand, lang, unsure = false, scanImage = null) {
   let data = null;
   try {
     data = await loadCardData(cand, lang);
@@ -298,7 +325,7 @@ async function addToBatch(cand, lang, unsure = false) {
     lang,
     name: data?.display?.name || cand.name,
     setName: data?.display?.set?.name || cand.set?.n || '',
-    image: data ? storedImage(data) : null,
+    ...(data ? imageFields(data, scanImage) : { image: null, scanImage }),
     variantKey: variant?.key,
     variantLabel: variant?.label,
     value,
@@ -306,11 +333,11 @@ async function addToBatch(cand, lang, unsure = false) {
     idProduct: variant?.cm?.idProduct || null,
   };
   batch.push(entry);
-  addHistory({ ...candidateFromCand(cand), lang, name: entry.name, setName: entry.setName, image: entry.image, price: value, variantLabel: entry.variantLabel });
+  addHistory({ ...candidateFromCand(cand), lang, name: entry.name, setName: entry.setName, image: entry.image, scanImage: entry.scanImage, price: value, variantLabel: entry.variantLabel });
   renderBatch(true);
   haptic([10, 30, 10]);
   const shown = conditionValue(value, settings.condition);
-  toast(`${unsure ? 'Unsicher: ' : ''}${entry.name} · ${langInfo(lang).short}`, { type: unsure ? 'info' : 'success', image: entry.image ? `${entry.image}/low.webp` : undefined, price: shown ? money(shown) : '–', ms: unsure ? 3500 : 2200 });
+  toast(`${unsure ? 'Unsicher: ' : ''}${entry.name} · ${langInfo(lang).short}`, { type: unsure ? 'info' : 'success', image: thumbOf(entry) || undefined, price: shown ? money(shown) : '–', ms: unsure ? 3500 : 2200 });
 }
 
 function batchTotal() {
@@ -324,7 +351,7 @@ function renderBatch(pulse = false) {
   strip.innerHTML = batch
     .slice(-14)
     .reverse()
-    .map((e) => (e.image ? `<img src="${esc(e.image)}/low.webp" alt="${esc(e.name)}" onerror="this.style.visibility='hidden'">` : '<img alt="">'))
+    .map((e) => (thumbOf(e) ? `<img src="${esc(thumbOf(e))}" alt="${esc(e.name)}" onerror="this.style.visibility='hidden'">` : '<img alt="">'))
     .join('');
   if (pulse) {
     const t = $('#batch-total');
@@ -347,7 +374,7 @@ function reviewBatch() {
               .map(
                 (e, i) => `
         <div class="hist-item">
-          ${e.image ? `<img src="${esc(e.image)}/low.webp" alt="" loading="lazy">` : '<div class="ph"></div>'}
+          ${thumbOf(e) ? `<img src="${esc(thumbOf(e))}" alt="" loading="lazy">` : '<div class="ph"></div>'}
           <button class="row-main" data-open="${i}" style="text-align:left">
             <div class="row-title">${esc(e.name)}</div>
             <div class="row-sub">${esc(e.setName)} · ${esc(e.cand.localId)} · ${langInfo(e.lang).flag} ${esc(e.variantLabel || '')}</div>
@@ -382,7 +409,7 @@ function reviewBatch() {
     box.querySelectorAll('[data-open]').forEach((b) =>
       b.addEventListener('click', () => {
         const e = batch[Number(b.dataset.open)];
-        showCard({ candidate: e.cand, lang: e.lang, langSource: 'Serienscan' });
+        showCard({ candidate: e.cand, lang: e.lang, langSource: 'Serienscan', scanImage: e.scanImage });
       }),
     );
     box.querySelector('[data-action="batch-save"]')?.addEventListener('click', async () => {
@@ -399,6 +426,7 @@ function reviewBatch() {
           setDate: e.cand.set?.d || null,
           official: e.cand.set?.o || null,
           image: e.image,
+          ...(e.scanImage ? { scanImage: e.scanImage } : {}),
           variantKey: e.variantKey,
           variantLabel: e.variantLabel,
           condition: settings.condition,
@@ -455,7 +483,7 @@ export async function openHistory() {
               .map(
                 (h, i) => `
         <button class="hist-item" data-i="${i}">
-          ${h.image ? `<img src="${esc(h.image)}/low.webp" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="ph"></div>'}
+          ${thumbOf(h) ? `<img src="${esc(thumbOf(h))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="ph"></div>'}
           <div class="row-main">
             <div class="row-title">${esc(h.name)}</div>
             <div class="row-sub">${esc(h.setName || '')} · ${esc(h.localId)} · ${langInfo(h.lang).flag} · ${esc(relTime(h.at))}</div>
@@ -472,7 +500,7 @@ export async function openHistory() {
     b.addEventListener('click', async () => {
       const h = list[Number(b.dataset.i)];
       const set = await findSet(h.group, h.setId);
-      showCard({ candidate: candidateFromItem(h, set), lang: h.lang, langSource: 'aus dem Verlauf' });
+      showCard({ candidate: candidateFromItem(h, set), lang: h.lang, langSource: 'aus dem Verlauf', scanImage: h.scanImage });
     }),
   );
   root.querySelector('[data-action="clear-history"]')?.addEventListener('click', async () => {

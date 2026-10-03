@@ -5,7 +5,7 @@ import { getCard, findSet } from '../api.js';
 import { variantsOf, conditionInfo, cardmarketUrl, conditionValue, conditionFactor } from '../pricing.js';
 import { LANGS, langInfo } from '../lang.js';
 import { $, esc, money, percent, date, haptic, download } from '../util.js';
-import { showCard, candidateFromItem, cardNumber } from './result.js';
+import { showCard, candidateFromItem, cardNumber, thumbOf } from './result.js';
 import { historyChart } from './charts.js';
 import { toast } from './toast.js';
 import { openSheet, closeSheet } from './sheet.js';
@@ -71,7 +71,7 @@ function tile(i, idx) {
   const ch = change(i);
   const hit = i.list === 'wish' && i.target && unit(i) && unit(i) <= i.target;
   const cond = conditionInfo(i.condition);
-  const img = i.image ? `${i.image}/low.webp` : null;
+  const img = thumbOf(i);
   return `
     <button class="tile ${hit ? 'is-hit' : ''}" data-uid="${esc(i.uid)}" style="animation-delay:${Math.min(idx, 12) * 30}ms">
       <div class="thumb">
@@ -168,7 +168,7 @@ export async function refreshPrices({ silent = false } = {}) {
     toast(failed ? `${done} aktualisiert, ${failed} fehlgeschlagen` : `${done} ${done === 1 ? 'Preis' : 'Preise'} aktualisiert`, { type: failed ? 'error' : 'success' });
   }
   for (const a of alarms.slice(0, 3)) {
-    toast(`Preisalarm: ${a.name} (${conditionInfo(a.condition).short}) jetzt ${money(a.condPrice)}`, { type: 'success', ms: 6000, image: a.image ? `${a.image}/low.webp` : undefined });
+    toast(`Preisalarm: ${a.name} (${conditionInfo(a.condition).short}) jetzt ${money(a.condPrice)}`, { type: 'success', ms: 6000, image: thumbOf(a) || undefined });
   }
   if (alarms.length && 'Notification' in window && Notification.permission === 'granted') {
     try {

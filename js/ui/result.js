@@ -89,27 +89,46 @@ export function bestValue(data, variantKey) {
  * Bildquellen in Reihenfolge: Kartensprache, Englisch, andere Sprachversionen.
  * @returns {{urls: string[], alt: boolean}}  alt = Ersatzbild der englischen Ausgabe
  */
-function cardImages(data, cand, lang, quality = 'high') {
+function cardImages(data, cand, lang, scanImage, quality = 'high') {
   const list = [data.display?.image, data.priceCard?.image].filter(Boolean).map((b) => imageUrl(b, quality));
   if (cand?.group !== 'ja' && cand?.set) {
     for (const l of [lang, 'en', 'de', 'fr', 'es', 'it', 'pt']) if (l && l !== 'ja') list.push(guessImage(l, cand.set, cand.localId, quality));
   }
-  if (!list.length && data.altImage) return { urls: [imageUrl(data.altImage, quality)], alt: true };
-  return { urls: [...new Set(list.filter(Boolean))], alt: false };
+  // Kein Bild in der Datenbank: zuerst dein Scan, dann das Bild der englischen Ausgabe
+  if (scanImage) list.push(scanImage);
+  const altUrl = data.altImage ? imageUrl(data.altImage, quality) : null;
+  if (altUrl) list.push(altUrl);
+  return { urls: [...new Set(list.filter(Boolean))], altUrl };
 }
 
-/** Basis-URL fürs Speichern (Sammlung/Verlauf). */
-export function storedImage(data) {
-  return data.display?.image || data.priceCard?.image || data.altImage || null;
+/** Basis-URL eines echten Kartenbilds fürs Speichern (Sammlung/Verlauf) – sonst null. */
+export function storedImage(data, { withAlt = true } = {}) {
+  return data.display?.image || data.priceCard?.image || (withAlt ? data.altImage : null) || null;
+}
+
+/** Bildfelder für Sammlung/Verlauf: echtes Bild oder – falls keins existiert – dein Scan. */
+export function imageFields(data, scanImage) {
+  const real = storedImage(data, { withAlt: false });
+  if (real) return { image: real };
+  if (scanImage) return { image: null, scanImage };
+  return { image: data.altImage || null };
+}
+
+/** Vorschaubild (klein) für Kacheln: TCGdex-Bild oder gespeicherter Scan. */
+export function thumbOf(entry) {
+  return entry?.image ? `${entry.image}/low.webp` : entry?.scanImage || null;
 }
 
 /** <img> mit Ersatzquellen (der Reihe nach probiert); ohne Bild bleibt ein Platzhalter. */
-export function imgTag(src, fallback, { alt = '', cls = '', lazy = true, placeholder = '' } = {}) {
+export function imgTag(src, fallback, { alt = '', cls = '', lazy = true, placeholder = '', altUrl = '' } = {}) {
   if (!src) return placeholder;
   const fbs = [].concat(fallback || []).filter((u) => u && u !== src);
   const fb = fbs.length ? ` data-fbs="${esc(fbs.join('|'))}"` : '';
   const ph = placeholder ? `this.insertAdjacentHTML('afterend',${esc(JSON.stringify(placeholder))});` : '';
-  return `<img src="${esc(src)}"${fb} alt="${esc(alt)}"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy"' : ''} decoding="async" onerror="var l=(this.dataset.fbs||'').split('|').filter(Boolean);if(l.length){this.src=l.shift();this.dataset.fbs=l.join('|')}else{${ph}this.remove()}">`;
+  // Markiert am Elternelement, ob ein Scan oder das Ersatzbild der EN-Ausgabe angezeigt wird
+  const onload = `var k=this.src.indexOf('data:')===0?'scan':(this.dataset.alt&&this.src===this.dataset.alt?'alt':'');this.parentNode&&(this.parentNode.dataset.imgkind=k)`;
+  const altAttr = altUrl ? ` data-alt="${esc(altUrl)}"` : '';
+  return `<img src="${esc(src)}"${fb}${altAttr} alt="${esc(alt)}"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy"' : ''} decoding="async" onload="${onload}" onerror="var l=(this.dataset.fbs||'').split('|').filter(Boolean);if(l.length){this.src=l.shift();this.dataset.fbs=l.join('|')}else{${ph}this.remove()}">`;
 }
 
 /** Entsprechende Karte in der anderen Sprachgruppe (international <-> japanisch) suchen. */
@@ -307,7 +326,7 @@ function render(state) {
   const li = langInfo(lang);
   const set = d.set || p.set || {};
   const number = cardNumber(d.localId || cand.localId, set.cardCount?.official || cand.set?.o);
-  const images = cardImages(data, cand, lang);
+  const images = cardImages(data, cand, lang, state.scanImage);
   const setSymbol = set.symbol ? `${set.symbol}.webp` : null;
   const legalStd = p.legal?.standard;
   const linkFor = (minCondition) =>
@@ -335,8 +354,9 @@ function render(state) {
   return `
     <div class="result-hero">
       <div class="holo-card" data-action="zoom">
-        ${imgTag(images.urls[0], images.urls.slice(1), { alt: d.name, lazy: false, placeholder: noImage(cmLink) }) || noImage(cmLink)}
-        ${images.alt ? '<span class="img-badge" title="Für diese Karte gibt es kein Bild – gezeigt wird die englische Ausgabe">Bild: EN-Ausgabe</span>' : ''}
+        ${imgTag(images.urls[0], images.urls.slice(1), { alt: d.name, lazy: false, placeholder: noImage(cmLink), altUrl: images.altUrl }) || noImage(cmLink)}
+        <span class="img-badge b-scan" title="Für diese Karte gibt es kein Bild in der Datenbank – gezeigt wird dein Scan">Dein Scan</span>
+        <span class="img-badge b-alt" title="Für diese Karte gibt es kein Bild – gezeigt wird die englische Ausgabe">Bild: EN-Ausgabe</span>
       </div>
       <div class="result-meta">
         <h2>${esc(d.name)}</h2>
@@ -508,6 +528,7 @@ export async function showCard(o) {
     variantKey: o.item?.variantKey || null,
     data: null,
     history: null,
+    scanImage: o.scanImage || o.item?.scanImage || null, // eigenes Foto der Karte (falls kein Bild existiert)
     ask: null, // Kauf-Check: Angebotspreis
     toppedOnce: false,
     token: Symbol('card'),
@@ -587,7 +608,7 @@ function itemPayload(state, list) {
     setName: d.set?.name || state.cand.set?.n || '',
     setDate: state.cand.set?.d || null,
     official: d.set?.cardCount?.official || state.cand.set?.o || null,
-    image: storedImage(state.data),
+    ...imageFields(state.data, state.scanImage),
     variantKey: v?.key,
     variantLabel: v?.label,
     condition: Number(state.condition) || 2,
@@ -716,7 +737,7 @@ function bind(container, state) {
     haptic([10, 30, 10]);
     toast(merged ? `Anzahl erhöht (${item.qty}×)` : state.ask ? `Zur Sammlung hinzugefügt · Einkauf ${money(state.ask)}` : 'Zur Sammlung hinzugefügt', {
       type: 'success',
-      image: item.image ? `${item.image}/low.webp` : undefined,
+      image: thumbOf(item) || undefined,
       action: { label: 'Rückgängig', fn: () => (merged ? updateItem(item.uid, { qty: item.qty - 1 }) : removeItem(item.uid)) },
     });
   });
@@ -819,7 +840,7 @@ export function candidateFromItem(item, set) {
     id: item.id,
     name: item.name,
     set: set || { n: item.setName, o: item.official, d: item.setDate },
-    hasImage: !!item.image,
+    hasImage: !!item.image || !!item.scanImage,
   };
 }
 

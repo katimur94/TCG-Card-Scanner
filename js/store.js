@@ -67,6 +67,7 @@ export async function addItem(data) {
   const existing = items.find((i) => sameSlot(i, data));
   if (existing) {
     existing.qty = (existing.qty || 1) + (data.qty || 1);
+    if (!existing.image && !existing.scanImage && data.scanImage) existing.scanImage = data.scanImage;
     if (data.price != null) {
       existing.price = data.price;
       existing.priceUpdated = data.priceUpdated;
