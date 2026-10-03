@@ -24,6 +24,7 @@ const SHELL = [
   'js/parse.js',
   'js/identify.js',
   'js/recognize.js',
+  'js/deal.js',
   'js/pricing.js',
   'js/camera.js',
   'js/ui/sheet.js',

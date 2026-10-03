@@ -17,6 +17,7 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 - **Preis nach Zustand** für alle Cardmarket-Zustände (MT, NM, EX, GD, LP, PL, PO): Richtwert je Zustand (Preistrend = NM, übliche Abschläge, in „Mehr“ anpassbar) und je Zustand ein Direktlink zu den echten Cardmarket-Angeboten – gefiltert auf Kartensprache und Zustand, günstigstes zuerst
 - **Sprachgerechte Cardmarket-Links**: öffnet das Produkt direkt mit Filter auf die Kartensprache und den gewünschten Mindestzustand
 - **Japanische Karten** werden als eigene Cardmarket-Produkte mit eigenem Preis erkannt
+- **Kauf-Check**: Preis eingeben, zu dem du die Karte kaufen könntest (z. B. auf dem Flohmarkt) – HoloScan vergleicht mit dem Cardmarket-Wert im gewählten Zustand und sagt sofort, ob es ein Top-Deal, ein guter Kauf, ein fairer Preis oder zu teuer ist. Dazu: Ersparnis, möglicher Gewinn beim Weiterverkauf (nach 5 % Cardmarket-Provision und Verpackung), Verhandlungsziele und eine Investment-Einschätzung (Kursentwicklung, Set-Alter, Seltenheit, Wertniveau, Schwankung) mit Begründung. Beim Hinzufügen zur Sammlung wird der Preis als Einkaufspreis übernommen. Keine Anlageberatung.
 - **Serienscan**: Karten nacheinander scannen, der Gesamtwert des Stapels wird live summiert
 - **Sammlung** mit Gesamtwert, Wertentwicklung seit dem Hinzufügen, Einkaufspreis/Gewinn und Wertverlauf
 - **Merkliste mit Preisalarm** (wird beim Öffnen der App geprüft, optional mit Benachrichtigung)
@@ -81,7 +82,8 @@ js/lang.js                   Sprachen, Cardmarket-IDs, Spracherkennung
 js/identify.js               Zuordnung zum Kartenindex, unscharfe Suche
 js/recognize.js              Gesamte Erkennungs-Pipeline
 js/api.js                    TCGdex-Client und Index-Laden
-js/pricing.js                Varianten, Preisfelder, Cardmarket-Links
+js/pricing.js                Varianten, Preisfelder, Zustands-Richtwerte, Cardmarket-Links
+js/deal.js                   Kauf-Check und Investment-Einschätzung
 js/store.js, js/db.js        Sammlung, Verlauf, Einstellungen (IndexedDB)
 js/ui/*                      Ansichten (Scanner, Ergebnis, Sammlung, Suche, Mehr)
 data/                        Offline-Kartenindex (generiert)

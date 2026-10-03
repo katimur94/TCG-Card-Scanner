@@ -9,6 +9,7 @@ import { esc, money, percent, date, haptic } from '../util.js';
 import { openSheet, closeSheet, sheetBody } from './sheet.js';
 import { enableHolo } from './holo.js';
 import { guideChart, historyChart } from './charts.js';
+import { evaluateBuy, evaluateInvestment, verdictSummary, SELL_FEE, PACKAGING } from '../deal.js';
 import { toast, sparkle } from './toast.js';
 
 const ICON = {
@@ -104,6 +105,120 @@ export function cardNumber(localId, official) {
   if (!official || (pre && !['TG', 'GG', 'SV', 'RC', 'H'].includes(pre))) return lid;
   const digits = lid.slice(pre.length);
   return `${lid}/${pre}${String(official).padStart(digits.length >= 3 ? 3 : pre ? digits.length : 0, '0')}`;
+}
+
+// ---------- Kauf-Check ----------
+
+const VERDICT_ICON = { top: '★', good: '✓', fair: '≈', high: '!', bad: '✕' };
+const RATIO_MIN = 0.4;
+const RATIO_MAX = 1.4;
+
+/** Eingabe als Euro-Betrag lesen ("12,50", "12.5", "12 €"). */
+export function parseEuro(text) {
+  const t = String(text ?? '').replace(/[^\d,.]/g, '');
+  if (!t) return null;
+  // letztes Komma/Punkt ist das Dezimaltrennzeichen
+  const i = Math.max(t.lastIndexOf(','), t.lastIndexOf('.'));
+  const num = i >= 0 ? `${t.slice(0, i).replace(/[,.]/g, '')}.${t.slice(i + 1)}` : t;
+  const v = parseFloat(num);
+  return Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null;
+}
+
+function dealInputs(state) {
+  const v = currentVariant(state);
+  const cm = v?.cm;
+  const buy = evaluateBuy(state.ask, cm, state.condition);
+  const inv = cm?.value
+    ? evaluateInvestment({
+        cm,
+        market: buy?.market ?? conditionValue(cm.value, state.condition),
+        rarity: state.data.priceCard?.rarity,
+        setDate: state.cand.set?.d,
+        reverse: v?.reverse,
+        history: state.history,
+      })
+    : null;
+  return { buy, inv };
+}
+
+function gauge(ratio) {
+  const pos = (r) => ((Math.min(RATIO_MAX, Math.max(RATIO_MIN, r)) - RATIO_MIN) / (RATIO_MAX - RATIO_MIN)) * 100;
+  const zones = [
+    [RATIO_MIN, 0.6, 'var(--green)'],
+    [0.6, 0.85, '#7bd389'],
+    [0.85, 1.0, 'var(--gold)'],
+    [1.0, 1.15, '#f0954a'],
+    [1.15, RATIO_MAX, 'var(--red)'],
+  ];
+  return `
+    <div class="gauge" aria-hidden="true">
+      ${zones.map(([a, b, c]) => `<i style="left:${pos(a)}%;width:${pos(b) - pos(a)}%;background:${c}"></i>`).join('')}
+      <span class="gauge-mark" style="left:${pos(ratio)}%"></span>
+      <span class="gauge-tick" style="left:${pos(1)}%"></span>
+    </div>
+    <div class="gauge-labels"><span>günstig</span><span>Marktwert</span><span>teuer</span></div>`;
+}
+
+function dealResultHtml(state) {
+  const { buy, inv } = dealInputs(state);
+  const cond = conditionInfo(state.condition);
+  let html = '';
+  if (!currentVariant(state)?.cm?.value) {
+    return '<div class="note">Für diese Variante gibt es keinen Cardmarket-Preis – ein Vergleich ist nicht möglich.</div>';
+  }
+  if (!buy) {
+    html += `<div class="note">Gib ein, wofür du die Karte bekommen könntest – z. B. auf dem Flohmarkt. HoloScan vergleicht mit dem Cardmarket-Wert im Zustand <b>${esc(cond.label)}</b> und sagt dir, ob sich der Kauf lohnt.</div>`;
+  } else {
+    const t = buy.tier;
+    const save = buy.diff >= 0;
+    html += `
+      <div class="verdict v-${t.key}">
+        <div class="verdict-head">
+          <span class="verdict-icon">${VERDICT_ICON[t.key]}</span>
+          <div><div class="verdict-label">${esc(t.label)}</div><div class="verdict-text">${esc(t.text)}</div></div>
+        </div>
+        ${gauge(buy.ratio)}
+        <div class="verdict-grid">
+          <div><small>Marktwert (${esc(cond.short)})</small><b>${money(buy.market)}</b></div>
+          <div><small>Dein Preis</small><b>${money(buy.ask)}</b></div>
+          <div><small>${save ? 'Ersparnis' : 'Aufpreis'}</small><b class="${save ? 'up' : 'down'}">${money(Math.abs(buy.diff))} (${Math.abs(Math.round(buy.discount * 100))} %)</b></div>
+          <div><small>Gewinn bei Verkauf*</small><b class="${buy.profit >= 0 ? 'up' : 'down'}">${buy.profit >= 0 ? '+' : '−'}${money(Math.abs(buy.profit))}</b></div>
+        </div>
+        ${buy.notes.map((n) => `<p class="verdict-note">${esc(n)}</p>`).join('')}
+        ${buy.market >= 1 ? `<p class="verdict-targets">Guter Kauf bis <b>${money(buy.targetGood)}</b> · Top-Deal bis <b>${money(buy.targetTop)}</b></p>` : ''}
+        <p class="verdict-summary">${esc(verdictSummary(buy, inv || { key: 'neutral' }))}</p>
+        <small class="verdict-foot">* Verkauf zum Marktwert auf Cardmarket abzüglich ${Math.round(SELL_FEE * 100)} % Provision und ${money(PACKAGING)} Verpackung.</small>
+      </div>`;
+  }
+  if (inv) {
+    html += `
+      <div class="invest inv-${inv.key}">
+        <div class="invest-head"><span>Als Investment</span><b>${esc(inv.label)}</b></div>
+        <div class="invest-bar"><i style="width:${inv.score}%"></i><span>${inv.score}/100</span></div>
+        <ul class="invest-reasons">${inv.reasons.map((r) => `<li class="${r.sign > 0 ? 'plus' : r.sign < 0 ? 'minus' : 'zero'}">${esc(r.text)}</li>`).join('')}</ul>
+        <small>Regelbasierte Einschätzung aus Cardmarket-Daten, Set-Alter und Seltenheit – keine Anlageberatung.</small>
+      </div>`;
+  }
+  return html;
+}
+
+function dealSection(state, v, cm) {
+  if (!cm?.value) return '';
+  return `
+    <div class="section deal" id="deal">
+      <div class="section-title"><span>Kauf-Check</span><span style="text-transform:none;letter-spacing:0;font-weight:600">Lohnt sich der Kauf?</span></div>
+      <div class="deal-box">
+        <label class="deal-field">
+          <span class="deal-label">Angebotspreis</span>
+          <input id="deal-ask" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="z. B. 5,00" value="${state.ask ? String(state.ask).replace('.', ',') : ''}">
+          <span class="deal-eur">€</span>
+        </label>
+        <div class="deal-conds" role="group" aria-label="Zustand der Karte">
+          ${CONDITIONS.map((c) => `<button class="deal-cond ${c.id === Number(state.condition) ? 'is-active' : ''}" data-cond="${c.id}" style="--c:${c.color}" title="${esc(c.label)}">${esc(c.short)}</button>`).join('')}
+        </div>
+      </div>
+      <div id="deal-result">${dealResultHtml(state)}</div>
+    </div>`;
 }
 
 /** Zeile der Zustandstabelle: Auswahl + Richtwert + Link zu den echten Angeboten. */
@@ -221,6 +336,8 @@ function render(state) {
       ${settings.showUSD && v?.tcgplayer ? `<div class="usd-row"><span>TCGplayer Market (USA)</span><b>${money(v.tcgplayer.value, 'USD')}</b></div>` : ''}
     </div>
 
+    ${dealSection(state, v, cm)}
+
     ${hist && hist.length >= 2 ? `<div class="section"><div class="section-title"><span>Dein Preisverlauf</span><span style="text-transform:none;letter-spacing:0">${hist.length} Abrufe</span></div>${historyChart(hist)}</div>` : ''}
 
     <div class="section">
@@ -335,6 +452,8 @@ export async function showCard(o) {
     variantKey: o.item?.variantKey || null,
     data: null,
     history: null,
+    ask: null, // Kauf-Check: Angebotspreis
+    toppedOnce: false,
     token: Symbol('card'),
   };
   if (state.cand.group === 'ja') state.lang = 'ja';
@@ -420,6 +539,8 @@ function itemPayload(state, list) {
     price: v?.cm?.value ?? null,
     priceUpdated: v?.cm?.updated || null,
     idProduct: v?.cm?.idProduct || null,
+    // Preis aus dem Kauf-Check als Einkaufspreis übernehmen
+    ...(state.ask && list === 'collection' ? { buyPrice: state.ask } : {}),
   };
 }
 
@@ -483,6 +604,32 @@ function bind(container, state) {
     }),
   );
 
+  // Kauf-Check: Urteil live beim Tippen aktualisieren (ohne das Sheet neu zu zeichnen)
+  const askInput = container.querySelector('#deal-ask');
+  if (askInput) {
+    let lastTier = null;
+    const update = () => {
+      state.ask = parseEuro(askInput.value);
+      const box = container.querySelector('#deal-result');
+      if (box) box.innerHTML = dealResultHtml(state);
+      const tier = evaluateBuy(state.ask, currentVariant(state)?.cm, state.condition)?.tier.key || null;
+      if (tier && tier !== lastTier) haptic(tier === 'top' || tier === 'good' ? [8, 30, 8] : 8);
+      lastTier = tier;
+    };
+    askInput.addEventListener('input', update);
+    askInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') askInput.blur();
+    });
+    askInput.addEventListener('change', () => {
+      const buy = evaluateBuy(state.ask, currentVariant(state)?.cm, state.condition);
+      if (buy?.tier.key === 'top' && !state.toppedOnce) {
+        state.toppedOnce = true;
+        const r = container.querySelector('.verdict')?.getBoundingClientRect();
+        sparkle(r ? r.left + r.width / 2 : undefined, r ? r.top + 30 : undefined);
+      }
+    });
+  }
+
   container.querySelectorAll('[data-alt]').forEach((b) =>
     b.addEventListener('click', () => {
       const alt = state.alternatives[Number(b.dataset.alt)];
@@ -508,7 +655,7 @@ function bind(container, state) {
   act('add', async () => {
     const { item, merged } = await addItem(itemPayload(state, 'collection'));
     haptic([10, 30, 10]);
-    toast(merged ? `Anzahl erhöht (${item.qty}×)` : 'Zur Sammlung hinzugefügt', {
+    toast(merged ? `Anzahl erhöht (${item.qty}×)` : state.ask ? `Zur Sammlung hinzugefügt · Einkauf ${money(state.ask)}` : 'Zur Sammlung hinzugefügt', {
       type: 'success',
       image: item.image ? `${item.image}/low.webp` : undefined,
       action: { label: 'Rückgängig', fn: () => (merged ? updateItem(item.uid, { qty: item.qty - 1 }) : removeItem(item.uid)) },
