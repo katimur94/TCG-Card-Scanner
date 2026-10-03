@@ -9,7 +9,7 @@ import { conditionInfo, conditionValue, conditionFactor } from '../pricing.js';
 import { findSet, guessImage } from '../api.js';
 import { settings, saveSettings, addHistory, allHistory, clearHistory, addItem } from '../store.js';
 import { $, esc, money, haptic, relTime } from '../util.js';
-import { showCard, loadCardData, bestValue, candidateFromItem, cardNumber, imgTag } from './result.js';
+import { showCard, loadCardData, bestValue, candidateFromItem, cardNumber, imgTag, storedImage } from './result.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { toast } from './toast.js';
 
@@ -176,7 +176,7 @@ function openScanResult(cand, alternatives, lang, langSource, confidence = null)
     source: 'scan',
     onLoaded: (data, st) => {
       const { variant, value } = bestValue(data, st.variantKey);
-      addHistory({ ...candidateFromCand(cand), lang: st.lang, name: data.display.name, setName: data.display.set?.name || cand.set?.n, image: data.display.image || data.priceCard?.image || null, price: value, variantLabel: variant?.label });
+      addHistory({ ...candidateFromCand(cand), lang: st.lang, name: data.display.name, setName: data.display.set?.name || cand.set?.n, image: storedImage(data), price: value, variantLabel: variant?.label });
     },
   });
 }
@@ -298,7 +298,7 @@ async function addToBatch(cand, lang, unsure = false) {
     lang,
     name: data?.display?.name || cand.name,
     setName: data?.display?.set?.name || cand.set?.n || '',
-    image: data?.display?.image || data?.priceCard?.image || null,
+    image: data ? storedImage(data) : null,
     variantKey: variant?.key,
     variantLabel: variant?.label,
     value,

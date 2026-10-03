@@ -45,6 +45,11 @@ export function getCard(lang, id, { fresh = false } = {}) {
   return cached(key, () => fetchJSON(`${API}/${lang}/cards/${encodeURIComponent(id)}`));
 }
 
+/** Serverseitig gefilterte Kartenliste, z. B. findCards('en', 'dexId=448'). */
+export function findCards(lang, query) {
+  return cached(`find:${lang}:${query}`, () => fetchJSON(`${API}/${lang}/cards?${query}`));
+}
+
 export function getSet(lang, id) {
   return cached(`set:${lang}:${id}`, () => fetchJSON(`${API}/${lang}/sets/${encodeURIComponent(id)}`));
 }

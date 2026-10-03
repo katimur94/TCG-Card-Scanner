@@ -195,7 +195,8 @@ export function parseQuery(q) {
     out.total = parseInt(slash[4], 10);
     rest = s.replace(slash[0], ' ');
   }
-  const code = rest.match(/\b([A-Za-z]{2,4}\d?[a-zA-Z]?)\s+#?(\d{1,3})\b/);
+  // Set-Kürzel: "MEW 25", "SV2a 25", "M2a 92", "S8b 10"
+  const code = rest.match(/\b([A-Za-z]{2,4}|[A-Za-z]{1,4}\d{1,2}[a-zA-Z]?)\s+#?(\d{1,3})\b/);
   if (!slash && code) {
     out.code = code[1];
     out.num = parseInt(code[2], 10);

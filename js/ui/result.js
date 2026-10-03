@@ -1,6 +1,6 @@
 // Ergebnis-Ansicht einer Karte: Bild, Sprache, Varianten, Cardmarket-Preise, Aktionen.
 
-import { getCard, imageUrl, guessImage, loadSets } from '../api.js';
+import { getCard, imageUrl, guessImage, loadSets, findCards } from '../api.js';
 import { LANGS, LANG, langInfo } from '../lang.js';
 import { variantsOf, momentum, cardmarketUrl, CONDITIONS, conditionInfo, conditionFactor, conditionValue } from '../pricing.js';
 import { settings, addItem, updateItem, removeItem, recordPrice, priceHistory, priceKey, emit } from '../store.js';
@@ -38,7 +38,44 @@ export async function loadCardData(cand, lang) {
   }
   if (!priceCard && !display) throw new Error('Karte konnte nicht geladen werden.');
   const variants = variantsOf(priceCard || display);
-  return { display: display || priceCard, priceCard: priceCard || display, variants };
+  const shown = display || priceCard;
+  // Japanische Karte ohne Bild: Bild der englischen Ausgabe als Ersatz
+  const altImage = group === 'ja' && !shown.image ? await englishImageFor(shown, cand).catch(() => null) : null;
+  return { display: shown, priceCard: priceCard || display, variants, altImage };
+}
+
+// Seltenheiten mit Standard-Motiv – nur dort ist das Bild der englischen Ausgabe dasselbe Motiv
+const REGULAR_RARITIES = ['common', 'uncommon', 'rare', 'double rare', 'holo rare', 'rare holo', 'none'];
+
+/**
+ * Bild der englischen Ausgabe einer japanischen Karte (gleiche Pokédex-Nr., gleiche Kartenart).
+ * Bevorzugt das zeitlich nächste Set, das nach der japanischen Ausgabe erschien, und keine Secret Rares.
+ */
+async function englishImageFor(card, cand) {
+  const dex = card?.dexId?.[0];
+  if (!dex || !REGULAR_RARITIES.includes(String(card.rarity || '').toLowerCase())) return null;
+  const [list, { byId }] = await Promise.all([findCards('en', `dexId=${dex}`), loadSets()]);
+  const jn = String(card.name || '');
+  const mega = /^メガ/.test(jn);
+  const suffix = (jn.match(/(ex|EX|GX|VMAX|VSTAR|V)$/) || [])[1]?.toLowerCase() || '';
+  const jaDate = cand.set?.d ? new Date(cand.set.d) : null;
+  let best = null;
+  for (const c of list || []) {
+    if (!c.image) continue;
+    const n = c.name.toLowerCase();
+    if (mega !== n.startsWith('mega ')) continue;
+    if (((n.match(/ (ex|gx|vmax|vstar|v)$/) || [])[1] || '') !== suffix) continue;
+    const set = byId.get(`intl:${c.id.slice(0, c.id.length - c.localId.length - 1)}`);
+    if (!set?.d) continue;
+    const num = parseInt(c.localId, 10);
+    const secret = Number.isNaN(num) || (set.o && num > set.o);
+    let dist = jaDate ? (new Date(set.d) - jaDate) / 86400000 : 3650;
+    // Englische Ausgaben erscheinen meist einige Monate nach den japanischen
+    dist = dist >= 0 ? dist * 0.5 : -dist;
+    const score = dist + (secret ? 2000 : 0);
+    if (!best || score < best.score) best = { score, image: c.image };
+  }
+  return best?.image || null;
 }
 
 /** Bester Preis einer geladenen Karte (für Serienscan & Sammlung). */
@@ -48,18 +85,31 @@ export function bestValue(data, variantKey) {
 }
 
 /** Bild in Kartensprache, sonst englisches Bild als Ersatz. */
-function cardImages(data, cand, quality = 'high') {
+/**
+ * Bildquellen in Reihenfolge: Kartensprache, Englisch, andere Sprachversionen.
+ * @returns {{urls: string[], alt: boolean}}  alt = Ersatzbild der englischen Ausgabe
+ */
+function cardImages(data, cand, lang, quality = 'high') {
   const list = [data.display?.image, data.priceCard?.image].filter(Boolean).map((b) => imageUrl(b, quality));
-  if (!list.length && cand?.hasImage !== false && cand?.set) list.push(guessImage(cand.group === 'ja' ? 'ja' : 'en', cand.set, cand.localId, quality));
-  return [...new Set(list)];
+  if (cand?.group !== 'ja' && cand?.set) {
+    for (const l of [lang, 'en', 'de', 'fr', 'es', 'it', 'pt']) if (l && l !== 'ja') list.push(guessImage(l, cand.set, cand.localId, quality));
+  }
+  if (!list.length && data.altImage) return { urls: [imageUrl(data.altImage, quality)], alt: true };
+  return { urls: [...new Set(list.filter(Boolean))], alt: false };
 }
 
-/** <img> mit Ersatzquelle; ohne Bild bleibt ein Platzhalter. */
+/** Basis-URL fürs Speichern (Sammlung/Verlauf). */
+export function storedImage(data) {
+  return data.display?.image || data.priceCard?.image || data.altImage || null;
+}
+
+/** <img> mit Ersatzquellen (der Reihe nach probiert); ohne Bild bleibt ein Platzhalter. */
 export function imgTag(src, fallback, { alt = '', cls = '', lazy = true, placeholder = '' } = {}) {
   if (!src) return placeholder;
-  const fb = fallback && fallback !== src ? ` data-fb="${esc(fallback)}"` : '';
+  const fbs = [].concat(fallback || []).filter((u) => u && u !== src);
+  const fb = fbs.length ? ` data-fbs="${esc(fbs.join('|'))}"` : '';
   const ph = placeholder ? `this.insertAdjacentHTML('afterend',${esc(JSON.stringify(placeholder))});` : '';
-  return `<img src="${esc(src)}"${fb} alt="${esc(alt)}"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy"' : ''} decoding="async" onerror="if(this.dataset.fb){this.src=this.dataset.fb;this.dataset.fb=''}else{${ph}this.remove()}">`;
+  return `<img src="${esc(src)}"${fb} alt="${esc(alt)}"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy"' : ''} decoding="async" onerror="var l=(this.dataset.fbs||'').split('|').filter(Boolean);if(l.length){this.src=l.shift();this.dataset.fbs=l.join('|')}else{${ph}this.remove()}">`;
 }
 
 /** Entsprechende Karte in der anderen Sprachgruppe (international <-> japanisch) suchen. */
@@ -105,6 +155,11 @@ export function cardNumber(localId, official) {
   if (!official || (pre && !['TG', 'GG', 'SV', 'RC', 'H'].includes(pre))) return lid;
   const digits = lid.slice(pre.length);
   return `${lid}/${pre}${String(official).padStart(digits.length >= 3 ? 3 : pre ? digits.length : 0, '0')}`;
+}
+
+/** Platzhalter, wenn es kein Kartenbild gibt – mit Link zur Cardmarket-Seite (dort gibt es meist ein Foto). */
+function noImage(link) {
+  return `<div class="card-placeholder"><span>Kein Bild in der Datenbank</span><a class="ph-link" href="${esc(link)}" target="_blank" rel="noopener">Bild auf Cardmarket ansehen</a></div>`;
 }
 
 // ---------- Kauf-Check ----------
@@ -252,7 +307,7 @@ function render(state) {
   const li = langInfo(lang);
   const set = d.set || p.set || {};
   const number = cardNumber(d.localId || cand.localId, set.cardCount?.official || cand.set?.o);
-  const [img, imgFb] = cardImages(data, cand);
+  const images = cardImages(data, cand, lang);
   const setSymbol = set.symbol ? `${set.symbol}.webp` : null;
   const legalStd = p.legal?.standard;
   const linkFor = (minCondition) =>
@@ -280,7 +335,8 @@ function render(state) {
   return `
     <div class="result-hero">
       <div class="holo-card" data-action="zoom">
-        ${imgTag(img, imgFb, { alt: d.name, lazy: false, placeholder: '<div class="card-placeholder">Kein Bild verfügbar</div>' }) || '<div class="card-placeholder">Kein Bild verfügbar</div>'}
+        ${imgTag(images.urls[0], images.urls.slice(1), { alt: d.name, lazy: false, placeholder: noImage(cmLink) }) || noImage(cmLink)}
+        ${images.alt ? '<span class="img-badge" title="Für diese Karte gibt es kein Bild – gezeigt wird die englische Ausgabe">Bild: EN-Ausgabe</span>' : ''}
       </div>
       <div class="result-meta">
         <h2>${esc(d.name)}</h2>
@@ -531,7 +587,7 @@ function itemPayload(state, list) {
     setName: d.set?.name || state.cand.set?.n || '',
     setDate: state.cand.set?.d || null,
     official: d.set?.cardCount?.official || state.cand.set?.o || null,
-    image: d.image || state.data.priceCard?.image || null,
+    image: storedImage(state.data),
     variantKey: v?.key,
     variantLabel: v?.label,
     condition: Number(state.condition) || 2,
@@ -648,7 +704,10 @@ function bind(container, state) {
     }),
   );
 
-  container.querySelector('[data-action="zoom"]')?.addEventListener('click', () => zoom(container.querySelector('.holo-card img')?.src));
+  container.querySelector('[data-action="zoom"]')?.addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    zoom(container.querySelector('.holo-card img')?.src);
+  });
 
   const act = (name, fn) => container.querySelector(`[data-action="${name}"]`)?.addEventListener('click', fn);
 
