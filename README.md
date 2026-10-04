@@ -7,11 +7,13 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 ## Funktionen
 
 - **Scannen per Kamera** mit Kartenrahmen, Taschenlampe und optionalem **Auto-Scan** (löst aus, sobald die Karte ruhig im Rahmen liegt)
+- **Bild- und Texterkennung kombiniert**: HoloScan findet die Kanten der Karte, rückt sie gerade und vergleicht sie mit rund 24.000 Kartenbildern (KI-Bildmodell, läuft im Browser). Die Texterkennung liest parallel Nummer, Set-Kürzel und Namen und unterscheidet so Nachdrucke mit gleichem Motiv. Dadurch werden Karten auch bei Spiegelungen, Hüllen, Holo-Glanz, schrägem Winkel oder unscharfem Foto erkannt
 - **Foto-Import** aus der Galerie: Foto mit zwei Fingern zoomen, verschieben und bei Bedarf drehen, bis die Karte im Rahmen liegt – gescannt wird genau der Rahmen; das Foto bleibt zum Nachjustieren stehen
 - **Spracherkennung**: Deutsch, Englisch, Französisch, Spanisch, Italienisch, Portugiesisch und Japanisch, erkannt über
   - den aufgedruckten Sprachcode (z. B. „PAL DE“ ab Karmesin & Purpur),
   - Kartenbegriffe wie Schwäche/Weakness/Faiblesse, KP/HP/PV/PS,
-  - den gelesenen Kartennamen (z. B. „Enigmara“ → Deutsch).
+  - den gelesenen Kartennamen (z. B. „Enigmara“ → Deutsch),
+  - die Form der Textzeilen im Vergleich mit allen Sprachausgaben derselben Karte – funktioniert auch, wenn der Text zu unscharf zum Lesen ist.
 - **Cardmarket-Preise** aus dem offiziellen Preisguide: Preistrend, Ab-Preis, Ø Verkaufspreis, Ø 1/7/30 Tage und die Tendenz (7 gegenüber 30 Tagen)
 - **Varianten** mit eigenem Preis: Normal, Holo, Reverse Holo, Pokéball- und Meisterball-Muster, 1. Edition …
 - **Preis nach Zustand** für alle Cardmarket-Zustände (MT, NM, EX, GD, LP, PL, PO): Richtwert je Zustand (Preistrend = NM, übliche Abschläge, in „Mehr“ anpassbar) und je Zustand ein Direktlink zu den echten Cardmarket-Angeboten – gefiltert auf Kartensprache und Zustand, günstigstes zuerst
@@ -33,10 +35,18 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 
 ## So funktioniert die Erkennung
 
-1. Die Texterkennung ([Tesseract.js](https://github.com/naptha/tesseract.js)) läuft **direkt auf dem Gerät**; es werden keine Fotos hochgeladen.
-2. Gelesen werden die ganze Karte, die Namensleiste und – vergrößert – der untere Rand mit Kartennummer (z. B. `025/165`) und Set-Kürzel.
-3. Ein Offline-Kartenindex (`data/`) ordnet Nummer, Gesamtzahl, Set-Kürzel und Namen einer Karte zu. Dabei werden einzelne falsch gelesene Ziffern toleriert und anhand des Namens geprüft.
-4. Preise und Kartendetails kommen live von [TCGdex](https://tcgdex.dev), das den Cardmarket-Preisguide täglich übernimmt.
+Alles läuft **direkt auf dem Gerät**; es werden keine Fotos hochgeladen.
+
+1. **Karte finden:** Im Kamerarahmen werden die vier Kartenkanten gesucht (Kantenbild, Liniensuche mit kleinen Winkeln) und die Karte perspektivisch gerade gerückt.
+2. **Bildsuche:** Ein Bildmodell ([MobileNetV4](https://huggingface.co/timm/mobilenetv4_conv_small.e2400_r224_in1k) über [ONNX Runtime Web](https://onnxruntime.ai)) berechnet einen Merkmalsvektor. Eine gelernte Whitening-Projektion macht ihn robust gegen Spiegelungen, Unschärfe, Holo-Glanz und Farbstich (trainiert mit simulierten Handyfotos). Verglichen wird mit dem Vektor-Index aller Kartenbilder (`data/vision/`, ca. 3 MB).
+3. **Texterkennung:** Parallel liest [Tesseract.js](https://github.com/naptha/tesseract.js) die gerade gerückte Karte: Namensleiste und – vergrößert – den unteren Rand mit Kartennummer (z. B. `025/165`) und Set-Kürzel. Ein Offline-Kartenindex (`data/`) ordnet Nummer, Gesamtzahl, Set-Kürzel und Namen zu; einzelne falsch gelesene Ziffern werden toleriert.
+4. **Zusammenführen:** Bild- und Texthinweise werden gewichtet kombiniert. Das Bild findet die Karte auch ohne lesbaren Text, der Text entscheidet zwischen Nachdrucken mit gleichem Motiv und zwischen japanischer und internationaler Ausgabe.
+5. **Sprache:** Neben Sprachcode, Kartenbegriffen und Namen vergleicht HoloScan die grobe Textstruktur des Fotos mit vorberechneten Signaturen derselben Karte in jeder Sprache (`data/vision/lang/`).
+6. Preise und Kartendetails kommen live von [TCGdex](https://tcgdex.dev), das den Cardmarket-Preisguide täglich übernimmt.
+
+Beim ersten Scan werden Bildmodell und Index einmalig geladen (ca. 25 MB) und danach offline aus dem Cache genutzt. In „Mehr“ lässt sich die Bilderkennung abschalten.
+
+Gemessen an 160 simulierten Handyfotos (Spiegelungen, Hüllen, Holo-Glanz, Unschärfe, Schräglage; 3 Schwierigkeitsstufen): Die reine Texterkennung fand 34 % der Karten, die Kombination aus Bild- und Texterkennung 91 %.
 
 Hinweis zu Zuständen: Cardmarket veröffentlicht nur den Preisguide (Trend, Ab-Preis, Durchschnitte) und keine Preise je Zustand; die einzelnen Angebote sind nicht frei abrufbar. Die Zustandspreise in HoloScan sind deshalb Richtwerte, die echten Angebote öffnet der Link der jeweiligen Zeile. Der Sammlungswert rechnet mit dem Zustand jeder Karte.
 
@@ -50,7 +60,7 @@ Der Workflow `.github/workflows/pages.yml` veröffentlicht die App bei jedem Pus
 2. Unter **Build and deployment → Source** die Option **GitHub Actions** wählen
 3. Unter **Actions** den Workflow „GitHub Pages“ erneut starten („Re-run all jobs“ oder „Run workflow“)
 
-Montags aktualisiert derselbe Workflow automatisch den Kartenindex, damit neue Sets erkannt werden.
+Montags aktualisiert derselbe Workflow automatisch den Kartenindex und ergänzt den Bildindex um neue Karten, damit neue Sets erkannt werden.
 
 ## Lokal starten
 
@@ -70,6 +80,13 @@ Kartenindex neu erzeugen (Node.js 22 oder neuer):
 node scripts/build-index.mjs
 ```
 
+Bildindex und Sprach-Signaturen ergänzen (Python 3; berechnet nur fehlende Karten):
+
+```bash
+pip install onnxruntime opencv-python-headless numpy
+python3 scripts/build-vision-index.py
+```
+
 ## Aufbau
 
 ```
@@ -81,6 +98,7 @@ js/ocr.js                    Texterkennung (Tesseract.js)
 js/parse.js                  Nummer, Set-Kürzel, Sprachcode, Name aus dem OCR-Text
 js/lang.js                   Sprachen, Cardmarket-IDs, Spracherkennung
 js/identify.js               Zuordnung zum Kartenindex, unscharfe Suche
+js/vision.js                 Kartenkanten, Entzerrung, Bildsuche, Sprache am Bild
 js/recognize.js              Gesamte Erkennungs-Pipeline
 js/api.js                    TCGdex-Client und Index-Laden
 js/pricing.js                Varianten, Preisfelder, Zustands-Richtwerte, Cardmarket-Links
@@ -88,7 +106,10 @@ js/deal.js                   Kauf-Check und Investment-Einschätzung
 js/store.js, js/db.js        Sammlung, Verlauf, Einstellungen (IndexedDB)
 js/ui/*                      Ansichten (Scanner, Ergebnis, Sammlung, Suche, Mehr)
 data/                        Offline-Kartenindex (generiert)
+data/vision/                 Bildindex (int8-Vektoren) und Sprach-Signaturen (generiert)
+models/card-embed.onnx       Bildmodell + gelerntes Whitening
 scripts/build-index.mjs      Erzeugt den Kartenindex aus TCGdex
+scripts/build-vision-index.py  Erzeugt Bildindex und Sprach-Signaturen
 vendor/tesseract/            Tesseract.js (Apache-2.0)
 ```
 
@@ -96,6 +117,8 @@ vendor/tesseract/            Tesseract.js (Apache-2.0)
 
 - Kartendaten, Bilder und Preise: [TCGdex](https://tcgdex.dev) (Cardmarket-Preisguide, TCGplayer)
 - Texterkennung: [Tesseract.js](https://github.com/naptha/tesseract.js), Apache-2.0 (`vendor/tesseract/LICENSE.md`)
+- Bildmodell: [MobileNetV4](https://huggingface.co/timm/mobilenetv4_conv_small.e2400_r224_in1k) (timm), Apache-2.0, ergänzt um eine eigene Whitening-Projektion
+- Laufzeit: [ONNX Runtime Web](https://github.com/microsoft/onnxruntime), MIT (über jsDelivr)
 - Schrift: [Outfit](https://fonts.google.com/specimen/Outfit), SIL Open Font License
 
 HoloScan ist ein inoffizielles Fanprojekt. Pokémon und alle zugehörigen Namen sind Marken von Nintendo, Creatures Inc., GAME FREAK und The Pokémon Company. Das Projekt ist nicht mit Cardmarket oder TCGdex verbunden. Alle Preise ohne Gewähr.

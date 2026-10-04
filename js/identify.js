@@ -174,21 +174,31 @@ function yearBonus(set, year) {
 }
 
 /**
+ * Punkte für einen Treffer der Bildsuche (Kosinus-Ähnlichkeit nach Whitening).
+ * Gemessen an Testfotos: ab ~0,7 mit Abstand zum Zweiten praktisch immer richtig, unter ~0,45 Zufall.
+ */
+function visualScore(sim) {
+  return 110 * Math.max(0, Math.min(1, (sim - 0.35) / 0.45));
+}
+
+/**
  * @param parsed  Ergebnis von parseCard()
  * @param opts.lang      erkannte/gewählte Kartensprache (oder null)
  * @param opts.fallback  Standardsprache, wenn nichts erkannt wurde
  * @param opts.jaHint    0..1 – wie sehr der OCR-Text nach japanischer Karte aussieht
+ * @param opts.visual    Treffer der Bildsuche [{group, setId, localId, sim}] (absteigend)
  * @returns {Promise<Array<Candidate>>} absteigend nach Score
  */
-export async function identify(parsed, { lang = null, fallback = 'de', jaHint = 0 } = {}) {
+export async function identify(parsed, { lang = null, fallback = 'de', jaHint = 0, visual = null } = {}) {
   const idx = await loadSets();
   const effLang = lang || fallback;
   const wantJa = lang === 'ja' || parsed.jaCodes.length > 0;
+  const seen = (visual || []).filter((v) => v.sim >= visual[0].sim - 0.2);
 
   // Namensverzeichnisse: Englisch (Set-Struktur), erkannte Sprache, ggf. Japanisch
   const dirLangs = new Set(['en']);
   if (LANG[effLang]?.group === 'intl') dirLangs.add(effLang);
-  if (wantJa || parsed.numbers.length) dirLangs.add('ja');
+  if (wantJa || parsed.numbers.length || seen.some((v) => v.group === 'ja')) dirLangs.add('ja');
   const dirs = Object.fromEntries(
     await Promise.all([...dirLangs].map(async (l) => [l, await nameDirectory(l).catch(() => null)])),
   );
@@ -210,6 +220,12 @@ export async function identify(parsed, { lang = null, fallback = 'de', jaHint = 
     }
     return c;
   };
+
+  // 0) Bildsuche: Karten mit ähnlichstem Bild (unabhängig von lesbarem Text)
+  for (const v of seen) {
+    const c = add(v.group, v.setId, v.localId, visualScore(v.sim), 'bild');
+    if (c) c.visual = v.sim;
+  }
 
   const numbers = parsed.numbers.slice(0, 4);
   const maxW = Math.max(1, ...numbers.map((n) => n.weight));
@@ -291,7 +307,9 @@ export async function identify(parsed, { lang = null, fallback = 'de', jaHint = 
     if (lang === 'ja') c.score += c.group === 'ja' ? 25 : 0;
     else if (lang) c.score += c.group === 'intl' ? 20 : 0;
     // keine Sprache erkannt: japanische Kandidaten je nach "Zeichensalat"-Indiz bevorzugen
-    if (c.group === 'ja' && lang !== 'ja') c.score += (lang ? 0 : 6) + jaHint * 18;
+    // (mit Bildsuche entscheidet bei gleichem Motiv die Standardsprache, nicht ein fester Bonus)
+    if (c.group === 'ja' && lang !== 'ja') c.score += (lang || visual?.length ? 0 : 6) + jaHint * 18;
+    if (!lang && visual?.length && c.group === (fallback === 'ja' ? 'ja' : 'intl')) c.score += 8;
     if (modern === true) c.score += isModernDate(c.set?.d) ? 12 : -12;
     c.score += yearBonus(c.set, parsed.year);
     // neuere Sets werden häufiger gescannt – minimaler Bonus als Gleichstandsbrecher

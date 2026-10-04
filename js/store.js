@@ -13,6 +13,7 @@ const DEFAULTS = {
   autoScan: false,
   batch: false,
   showUSD: true,
+  vision: true, // Bilderkennung (Modell wird einmalig geladen, ca. 25 MB)
   conditionFactors: null, // eigene Abschläge je Zustand {id: Faktor}, sonst Standard
 };
 

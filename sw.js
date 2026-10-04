@@ -8,6 +8,9 @@ const SHELL_CACHE = `holoscan-shell-${VERSION}`;
 const DATA_CACHE = 'holoscan-data-v1';
 const API_CACHE = 'holoscan-api-v1';
 const LIB_CACHE = 'holoscan-lib-v1';
+// Bilderkennung: Modell und Vektor-Index (URLs tragen den Modell-Hash, z. B. ?v=…)
+const VISION_CACHE = 'holoscan-vision-v1';
+const MAX_VISION_ENTRIES = 4;
 
 const SHELL = [
   './',
@@ -24,6 +27,7 @@ const SHELL = [
   'js/parse.js',
   'js/identify.js',
   'js/recognize.js',
+  'js/vision.js',
   'js/deal.js',
   'js/pricing.js',
   'js/camera.js',
@@ -82,6 +86,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin) {
     if (req.mode === 'navigate') {
       event.respondWith(networkFirst(req, SHELL_CACHE, 4000, 'index.html'));
+    } else if (url.search.startsWith('?v=') && (url.pathname.includes('/models/') || url.pathname.endsWith('/data/vision/index.bin'))) {
+      event.respondWith(versioned(req));
     } else if (url.pathname.includes('/data/')) {
       event.respondWith(staleWhileRevalidate(req, DATA_CACHE));
     } else {
@@ -108,6 +114,21 @@ async function cacheFirst(req, cacheName) {
   if (hit) return hit;
   const res = await fetch(req);
   if (res.ok) cache.put(req, res.clone());
+  return res;
+}
+
+/** Versionierte Dateien: exakt (mit ?v=) cachen, alte Versionen derselben Datei entfernen. */
+async function versioned(req) {
+  const cache = await caches.open(VISION_CACHE);
+  const hit = await cache.match(req);
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res.ok) {
+    const path = new URL(req.url).pathname;
+    for (const k of await cache.keys()) if (new URL(k.url).pathname === path) await cache.delete(k);
+    await cache.put(req, res.clone());
+    trim(cache, MAX_VISION_ENTRIES);
+  }
   return res;
 }
 

@@ -4,6 +4,7 @@ import { Camera, AutoTrigger } from '../camera.js';
 import { PhotoAligner } from './align.js';
 import { warmup } from '../ocr.js';
 import { recognize } from '../recognize.js';
+import { warmupVision, warpCard } from '../vision.js';
 import { LANGS, langInfo } from '../lang.js';
 import { conditionInfo, conditionValue, conditionFactor } from '../pricing.js';
 import { findSet, guessImage } from '../api.js';
@@ -62,8 +63,8 @@ export async function startCamera() {
     stage().classList.add('is-ready');
     $('#btn-torch').disabled = !camera.hasTorch;
     updateToggles();
-    // OCR-Engine schon vorladen, damit der erste Scan schnell ist
-    setTimeout(() => warmup(), 400);
+    // OCR-Engine und Bilderkennung schon vorladen, damit der erste Scan schnell ist
+    setTimeout(() => warmup().then(() => settings.vision && warmupVision()), 400);
   } catch (err) {
     console.warn(err);
     wantCamera = false;
@@ -127,13 +128,14 @@ async function process(canvas, { fitToText = false } = {}) {
       fitToText,
       scanLang: settings.scanLang,
       fallback: settings.fallbackLang,
+      useVision: settings.vision,
       onStatus: (text, p) => text && setStatus(text, p != null && p < 1 && p > 0 ? `${Math.round(p * 100)} %` : ''),
     });
     window.__holoscanLast = result;
     console.debug('[HoloScan]', result);
     const { cands, best, cardLang, langSource, parsed } = result;
     // eigenes Foto der Karte – wird gezeigt, wenn es in der Datenbank kein Bild gibt
-    const scanImage = scanThumb(canvas);
+    const scanImage = scanThumb(canvas, result.vision?.quad);
 
     if (!best) {
       haptic([30, 60, 30]);
@@ -169,11 +171,13 @@ async function process(canvas, { fitToText = false } = {}) {
 }
 
 /**
- * Kleines JPEG des gescannten Kartenausschnitts (ohne den 4-%-Rand für die Texterkennung).
+ * Kleines JPEG der gescannten Karte: gerade gerückt, wenn die Kanten gefunden wurden,
+ * sonst der Ausschnitt ohne den 4-%-Rand für die Texterkennung.
  * @returns {string|null} Data-URL
  */
-function scanThumb(canvas, width = 360, margin = 0.04) {
+function scanThumb(canvas, quad = null, width = 360, margin = 0.04) {
   try {
+    if (quad) return warpCard(canvas, quad, width, Math.round((width * 88) / 63)).toDataURL('image/jpeg', 0.82);
     const f = margin / (1 + 2 * margin);
     const sx = canvas.width * f;
     const sy = canvas.height * f;

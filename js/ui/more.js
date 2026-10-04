@@ -5,12 +5,13 @@ import { LANGS } from '../lang.js';
 import { CONDITIONS, DEFAULT_CONDITION_FACTORS, conditionFactor } from '../pricing.js';
 import { indexInfo, loadCardIndex, loadSets } from '../api.js';
 import { warmup } from '../ocr.js';
+import { warmupVision } from '../vision.js';
 import { $, esc, date, haptic } from '../util.js';
 import { importJSON } from './collection.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { toast } from './toast.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 let installPrompt = null;
 export function setInstallPrompt(e) {
@@ -35,6 +36,7 @@ const I = {
   clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   percent: '<svg viewBox="0 0 24 24"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
 };
 
 function select(id, options, value) {
@@ -85,6 +87,7 @@ export async function renderMore() {
         <div class="row"><span class="row-icon">${I.star}</span><span class="row-main"><span class="row-title">Zustand</span><div class="row-sub">Standard für neue Karten, Serienscan und Angebote</div></span>
           ${select('set-condition', CONDITIONS.map((c) => [c.id, c.label]), settings.condition)}</div>
         <button class="row" data-action="cond-factors"><span class="row-icon">${I.percent}</span><span class="row-main"><span class="row-title">Preise je Zustand</span><div class="row-sub">${esc(CONDITIONS.filter((c) => c.id > 2).map((c) => `${c.short} ${Math.round(conditionFactor(c.id) * 100)} %`).join(' · '))}</div></span></button>
+        <div class="row"><span class="row-icon">${I.eye}</span><span class="row-main"><span class="row-title">Bilderkennung</span><div class="row-sub">Erkennt Karte und Sprache am Bild, auch wenn Text unleserlich ist – lädt einmalig ca. 25 MB</div></span>${sw('set-vision', settings.vision)}</div>
         <div class="row"><span class="row-icon">${I.dollar}</span><span class="row-main"><span class="row-title">TCGplayer-Preis zeigen</span><div class="row-sub">US-Marktpreis in Dollar als Vergleich</div></span>${sw('set-showUSD', settings.showUSD)}</div>
         <div class="row"><span class="row-icon">${I.vibe}</span><span class="row-main"><span class="row-title">Vibration</span><div class="row-sub">Haptisches Feedback beim Scannen</div></span>${sw('set-haptics', settings.haptics)}</div>
         ${
@@ -100,7 +103,7 @@ export async function renderMore() {
       <div class="list">
         <button class="row" data-action="export"><span class="row-icon">${I.down}</span><span class="row-main"><span class="row-title">Sammlung exportieren</span><div class="row-sub">CSV für Excel oder JSON-Backup</div></span></button>
         <button class="row" data-action="import"><span class="row-icon">${I.up}</span><span class="row-main"><span class="row-title">Backup importieren</span><div class="row-sub">JSON-Datei aus HoloScan</div></span></button>
-        <button class="row" data-action="offline"><span class="row-icon">${I.cloud}</span><span class="row-main"><span class="row-title">Offline-Paket laden</span><div class="row-sub">Kartenindex aller Sprachen und Texterkennung vorab speichern</div></span></button>
+        <button class="row" data-action="offline"><span class="row-icon">${I.cloud}</span><span class="row-main"><span class="row-title">Offline-Paket laden</span><div class="row-sub">Kartenindex aller Sprachen, Text- und Bilderkennung vorab speichern</div></span></button>
         <button class="row" data-action="clear-hist"><span class="row-icon">${I.clock}</span><span class="row-main"><span class="row-title">Scan-Verlauf löschen</span></span></button>
         <button class="row" data-action="wipe"><span class="row-icon" style="color:var(--red)">${I.trash}</span><span class="row-main"><span class="row-title" style="color:var(--red)">Alle Daten löschen</span><div class="row-sub">Sammlung, Merkliste, Verlauf und Einstellungen</div></span></button>
       </div>
@@ -110,7 +113,7 @@ export async function renderMore() {
     <div class="group">
       <div class="group-title">So funktioniert's</div>
       <div class="note">
-        <b>Erkennung:</b> Die Texterkennung läuft direkt auf deinem Gerät. HoloScan liest Kartennummer (z. B. 025/165), Set-Kürzel, Namen und typische Begriffe wie „Schwäche“, „Weakness“ oder „KP/HP“ und bestimmt daraus Karte und Sprache.<br><br>
+        <b>Erkennung:</b> Alles läuft direkt auf deinem Gerät, es werden keine Fotos hochgeladen. HoloScan findet die Kanten der Karte, rückt sie gerade und vergleicht das Bild mit rund 24.000 Kartenbildern. Gleichzeitig liest die Texterkennung Kartennummer (z. B. 025/165), Set-Kürzel, Namen und Begriffe wie „Schwäche“ oder „KP/HP“ – das unterscheidet Nachdrucke mit gleichem Motiv. Die Sprache erkennt HoloScan am Text und, wenn der unleserlich ist, an der Form der Textzeilen im Vergleich zu allen Sprachausgaben der Karte.<br><br>
         <b>Preise:</b> Angezeigt wird der Cardmarket-Preisguide (Trend, Durchschnitte, Ab-Preis), täglich aktualisiert über TCGdex. Europäische Sprachversionen teilen sich bei Cardmarket ein Produkt – über den Link siehst du gezielt Angebote in der Sprache deiner Karte. Japanische Karten haben eigene Produkte und eigene Preise.
       </div>
     </div>
@@ -119,7 +122,7 @@ export async function renderMore() {
       <img src="assets/icons/icon.svg" alt="">
       <div><b style="color:var(--text)">HoloScan</b> · Version ${APP_VERSION}</div>
       ${info?.generated ? `<div>Kartenindex vom ${esc(date(info.generated))} · ${Object.values(info.langs || {}).reduce((a, b) => Math.max(a, b), 0).toLocaleString('de-DE')} Karten</div>` : ''}
-      <div>Kartendaten & Preise: <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> (Cardmarket-Preisguide) · Texterkennung: Tesseract.js</div>
+      <div>Kartendaten & Preise: <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> (Cardmarket-Preisguide) · Texterkennung: Tesseract.js · Bilderkennung: ONNX Runtime</div>
       <div style="margin-top:8px">Inoffizielles Fanprojekt. Pokémon und alle zugehörigen Namen sind Marken von Nintendo, Creatures Inc., GAME FREAK und The Pokémon Company. Nicht verbunden mit Cardmarket. Preise ohne Gewähr.</div>
     </div>`;
   bind();
@@ -139,6 +142,7 @@ function bind() {
   onChange('set-condition', 'condition', Number);
   onChange('set-showUSD', 'showUSD');
   onChange('set-haptics', 'haptics');
+  onChange('set-vision', 'vision');
 
   const act = (name, fn) => root.querySelector(`[data-action="${name}"]`)?.addEventListener('click', fn);
   act('install', async () => {
@@ -177,8 +181,12 @@ function bind() {
         sub.textContent = `Kartenindex ${++n}/${LANGS.length} …`;
       }
       sub.textContent = 'Texterkennung wird geladen …';
-      const ok = await warmup();
-      sub.textContent = ok ? 'Fertig – Suche und Erkennung funktionieren jetzt offline.' : 'Index gespeichert, Texterkennung fehlgeschlagen.';
+      let ok = await warmup();
+      if (ok && settings.vision) {
+        sub.textContent = 'Bilderkennung wird geladen (ca. 25 MB) …';
+        ok = await warmupVision();
+      }
+      sub.textContent = ok ? 'Fertig – Suche und Erkennung funktionieren jetzt offline.' : 'Index gespeichert, Erkennung fehlgeschlagen – bitte erneut versuchen.';
       toast('Offline-Paket gespeichert', { type: 'success' });
     } catch {
       sub.textContent = 'Fehlgeschlagen – bitte mit Internet erneut versuchen.';

@@ -1,31 +1,50 @@
-// Komplette Erkennung: Bild -> OCR -> Auswertung -> Kandidaten + Kartensprache.
+// Komplette Erkennung: Bild -> Bildsuche + OCR -> Auswertung -> Kandidaten + Kartensprache.
 
 import { readCard } from './ocr.js';
 import { parseCard } from './parse.js';
 import { identify, nameLanguage } from './identify.js';
 import { detectLanguage } from './lang.js';
 import { loadSets } from './api.js';
+import { visualSearch, visionReady, findCardQuad, straightCard, languageFromImage } from './vision.js';
+import { sleep } from './util.js';
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{fitToText?: boolean, scanLang?: string, fallback?: string, onStatus?: Function}} opts
- * @returns {Promise<{cands: Array, best: object|null, cardLang: string, langSource: string, parsed, det, ocr, ms: number}>}
+ * @param {{fitToText?: boolean, scanLang?: string, fallback?: string, useVision?: boolean, onStatus?: Function}} opts
+ * @returns {Promise<{cands: Array, best: object|null, cardLang: string, langSource: string, parsed, det, ocr, vision, ms: number}>}
  */
-export async function recognize(canvas, { fitToText = false, scanLang = 'auto', fallback = 'de', onStatus } = {}) {
+export async function recognize(canvas, { fitToText = false, scanLang = 'auto', fallback = 'de', useVision = true, onStatus } = {}) {
   const t0 = performance.now();
   const idx = await loadSets();
-  const ocr = await readCard(canvas, {
+  // Beim allerersten Scan wird das Modell evtl. noch geladen – dann nicht darauf warten
+  const visionWasReady = visionReady();
+  // Kartenkanten suchen: Bildsuche und Texterkennung arbeiten dann mit der gerade gerückten Karte
+  let quad = null;
+  try {
+    quad = fitToText ? null : findCardQuad(canvas);
+  } catch (err) {
+    console.warn('[HoloScan] Kantensuche fehlgeschlagen:', err);
+  }
+  // Bildsuche läuft parallel zur Texterkennung (die arbeitet in einem Worker)
+  const visionP = useVision
+    ? visualSearch(canvas, { quad }).catch((err) => {
+        console.warn('[HoloScan] Bildsuche nicht verfügbar:', err);
+        return null;
+      })
+    : Promise.resolve(null);
+  const ocr = await readCard(quad ? straightCard(canvas, quad) : canvas, {
     fitToText,
     onStatus,
     hasNumber: (lines) => parseCard({ lines, text: lines.map((l) => l.text).join('\n') }, idx).numbers.length > 0,
   });
   onStatus?.('Karte wird gesucht …');
+  const vision = await (visionWasReady ? visionP : Promise.race([visionP, sleep(1500).then(() => null)]));
   const parsed = parseCard(ocr, idx);
   const autoLang = scanLang === 'auto';
   const det = autoLang
     ? detectLanguage(ocr.text, { printedLang: parsed.printedLang, lines: ocr.lines })
     : { lang: scanLang, confidence: 1, evidence: [], jaHint: scanLang === 'ja' ? 1 : 0 };
-  const cands = await identify(parsed, { lang: det.lang, fallback, jaHint: det.jaHint });
+  const cands = await identify(parsed, { lang: det.lang, fallback, jaHint: det.jaHint, visual: vision?.matches });
   const best = cands[0] || null;
 
   const intlFallback = fallback === 'ja' ? 'en' : fallback;
@@ -60,5 +79,26 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
     }
   }
 
-  return { cands, best, cardLang, langSource, parsed, det, ocr, ms: Math.round(performance.now() - t0) };
+  // Sprache am Kartenbild: Textstruktur des Fotos gegen dieselbe Karte in jeder Sprache
+  // (hilft vor allem, wenn der Text zu unscharf zum Lesen ist)
+  let imageLang = null;
+  if (autoLang && best?.group === 'intl' && !parsed.printedLang && vision?.quad) {
+    imageLang = await languageFromImage(vision.view, best.setId, best.localId).catch(() => null);
+    const ocrLang = det.lang && det.lang !== 'ja' ? det.lang : null;
+    if (imageLang && imageLang.margin >= 0.02 && imageLang.best !== cardLang) {
+      const s = imageLang.scores;
+      const near = (l) => l in s && s[l] >= s[imageLang.best] - 0.08;
+      const byName = langSource === 'am Kartennamen erkannt';
+      // gelesener Text (Sprachbegriffe, eindeutiger Name) behält Vorrang, wenn das Bild ihn nicht klar widerlegt
+      const textConfirmed = (ocrLang && (!(ocrLang in s) || (det.confidence >= 0.7 && near(ocrLang)))) || (byName && (!(cardLang in s) || near(cardLang)));
+      // ohne Vergleichsbild in der Standardsprache lässt sich diese nicht ausschließen
+      const unverifiable = !ocrLang && !byName && !(intlFallback in s);
+      if (!textConfirmed && !unverifiable) {
+        cardLang = imageLang.best;
+        langSource = 'am Kartenbild erkannt';
+      }
+    }
+  }
+
+  return { cands, best, cardLang, langSource, parsed, det, ocr, vision, imageLang, ms: Math.round(performance.now() - t0) };
 }
