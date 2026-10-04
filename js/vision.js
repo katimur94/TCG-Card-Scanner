@@ -1,7 +1,7 @@
 // Bilderkennung: Karte im Kamerabild finden, gerade rücken und per Bild-Merkmalen im Kartenindex suchen.
 //
 // Ablauf: Kanten der Karte suchen (vier Linien mit kleinem Winkel) -> perspektivisch entzerren
-// -> Bildmodell (ONNX, im Browser) mit gelerntem Whitening -> 128-D-Vektor -> Ähnlichkeit
+// -> DINOv2-small (ONNX, int8, im Browser) mit gelerntem Whitening -> 128-D-Vektor -> Ähnlichkeit
 // zu allen Kartenbildern (data/vision/). Erzeugt wird der Index mit scripts/build-vision-index.py.
 
 const ORT_VERSION = '1.30.0';
@@ -565,13 +565,14 @@ export async function languageFromImage(view, setId, localId) {
   if (langs.length < 2) return null;
   const decoded = Object.fromEntries(langs.map((l) => [l, decodeSignature(refs[l])]));
   const feat = languageFeatures(view);
-  const shifts = [-6, -3, 0, 3, 6];
+  // Toleranz für ungenaue Kanten (z. B. Toploader): Verschiebung und Skalierung durchprobieren
+  const shifts = [-12, -8, -4, 0, 4, 8, 12];
   const scores = Object.fromEntries(langs.map((l) => [l, 0]));
   SIG_REGIONS.forEach(({ box, grid }, r) => {
     const best = Object.fromEntries(langs.map((l) => [l, -1]));
     for (const dx of shifts) {
       for (const dy of shifts) {
-        for (const sc of [0.96, 1, 1.04]) {
+        for (const sc of [0.92, 0.96, 1, 1.04, 1.08]) {
           const q = regionSignature(feat, box, grid, dx, dy, sc);
           for (const l of langs) {
             const ref = decoded[l][r];
@@ -604,6 +605,8 @@ export async function visualSearch(canvas, { k = 24, quad } = {}) {
     const view = q ? warpCard(canvas, q) : innerCrop(canvas);
     const matches = await nearestCards(await embedCard(view), k);
     if (!best || matches[0].sim > best.matches[0].sim) best = { matches, quad: q, view };
+    // eindeutiger Treffer -> weitere Ausschnitte sparen (Abstand ≥ 0,08 war im Test immer richtig)
+    if (best.matches[0].sim >= 0.7 && best.matches[0].sim - best.matches[1].sim >= 0.08) break;
   }
   return { ...best, ms: Math.round(performance.now() - t0) };
 }

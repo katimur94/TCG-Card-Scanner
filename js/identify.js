@@ -175,10 +175,11 @@ function yearBonus(set, year) {
 
 /**
  * Punkte für einen Treffer der Bildsuche (Kosinus-Ähnlichkeit nach Whitening).
- * Gemessen an Testfotos: ab ~0,7 mit Abstand zum Zweiten praktisch immer richtig, unter ~0,45 Zufall.
+ * Gemessen an Testfotos (DINOv2): richtige Treffer meist 0,7–0,95, Fehltreffer um 0,65–0,7 –
+ * dort sind es fast immer Karten mit gleichem Motiv, zwischen denen der Text entscheidet.
  */
 function visualScore(sim) {
-  return 110 * Math.max(0, Math.min(1, (sim - 0.35) / 0.45));
+  return 110 * Math.max(0, Math.min(1, (sim - 0.45) / 0.4));
 }
 
 /**

@@ -4,7 +4,7 @@
     pip install onnxruntime opencv-python-headless numpy
     python3 scripts/build-vision-index.py [--cache .cache/vision]
 
-Für jede Karte mit Bild wird mit models/card-embed.onnx (Bildmodell mit gelerntem
+Für jede Karte mit Bild wird mit models/card-embed.onnx (DINOv2-small, int8, mit gelerntem
 Whitening) ein 128-D-Merkmalsvektor berechnet
 (internationale Karten: englisches Bild, sonst eine andere Sprache; japanische Karten: eigenes Bild).
 Bereits berechnete Vektoren werden übernommen, solange sich das Modell nicht geändert hat –
@@ -38,7 +38,7 @@ OUT = os.path.join(DATA, 'vision')
 MODEL = os.path.join(ROOT, 'models', 'card-embed.onnx')
 ASSETS = 'https://assets.tcgdex.net'
 INTL_LANGS = ['en', 'de', 'fr', 'es', 'it', 'pt']
-IN_W, IN_H = 224, 320  # Eingangsgröße des Modells (Kartenformat)
+IN_W, IN_H = 182, 252  # Eingangsgröße des Modells (Vielfaches der Patchgröße 14, Kartenformat)
 MEAN = np.array([0.485, 0.456, 0.406], np.float32)
 STD = np.array([0.229, 0.224, 0.225], np.float32)
 

@@ -7,7 +7,7 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 ## Funktionen
 
 - **Scannen per Kamera** mit Kartenrahmen, Taschenlampe und optionalem **Auto-Scan** (löst aus, sobald die Karte ruhig im Rahmen liegt)
-- **Bild- und Texterkennung kombiniert**: HoloScan findet die Kanten der Karte, rückt sie gerade und vergleicht sie mit rund 24.000 Kartenbildern (KI-Bildmodell, läuft im Browser). Die Texterkennung liest parallel Nummer, Set-Kürzel und Namen und unterscheidet so Nachdrucke mit gleichem Motiv. Dadurch werden Karten auch bei Spiegelungen, Hüllen, Holo-Glanz, schrägem Winkel oder unscharfem Foto erkannt
+- **Bild- und Texterkennung kombiniert**: HoloScan findet die Kanten der Karte, rückt sie gerade und vergleicht sie mit rund 24.000 Kartenbildern (KI-Modell DINOv2, läuft im Browser). Die Texterkennung liest parallel Nummer, Set-Kürzel und Namen und unterscheidet so Nachdrucke mit gleichem Motiv. Dadurch werden Karten auch bei Spiegelungen, Hüllen, Holo-Glanz, schrägem Winkel oder unscharfem Foto erkannt
 - **Foto-Import** aus der Galerie: Foto mit zwei Fingern zoomen, verschieben und bei Bedarf drehen, bis die Karte im Rahmen liegt – gescannt wird genau der Rahmen; das Foto bleibt zum Nachjustieren stehen
 - **Spracherkennung**: Deutsch, Englisch, Französisch, Spanisch, Italienisch, Portugiesisch und Japanisch, erkannt über
   - den aufgedruckten Sprachcode (z. B. „PAL DE“ ab Karmesin & Purpur),
@@ -38,15 +38,15 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 Alles läuft **direkt auf dem Gerät**; es werden keine Fotos hochgeladen.
 
 1. **Karte finden:** Im Kamerarahmen werden die vier Kartenkanten gesucht (Kantenbild, Liniensuche mit kleinen Winkeln) und die Karte perspektivisch gerade gerückt.
-2. **Bildsuche:** Ein Bildmodell ([MobileNetV4](https://huggingface.co/timm/mobilenetv4_conv_small.e2400_r224_in1k) über [ONNX Runtime Web](https://onnxruntime.ai)) berechnet einen Merkmalsvektor. Eine gelernte Whitening-Projektion macht ihn robust gegen Spiegelungen, Unschärfe, Holo-Glanz und Farbstich (trainiert mit simulierten Handyfotos). Verglichen wird mit dem Vektor-Index aller Kartenbilder (`data/vision/`, ca. 3 MB).
+2. **Bildsuche:** Ein Bildmodell ([DINOv2-small](https://github.com/facebookresearch/dinov2), int8, über [ONNX Runtime Web](https://onnxruntime.ai)) berechnet einen Merkmalsvektor. Eine gelernte Whitening-Projektion macht ihn robust gegen Spiegelungen, Unschärfe, Holo-Glanz, Farbstich und Toploader (trainiert mit simulierten Handyfotos). Steckt die Karte in einem Toploader, werden zusätzlich engere Ausschnitte geprüft. Verglichen wird mit dem Vektor-Index aller Kartenbilder (`data/vision/`, ca. 3 MB).
 3. **Texterkennung:** Parallel liest [Tesseract.js](https://github.com/naptha/tesseract.js) die gerade gerückte Karte: Namensleiste und – vergrößert – den unteren Rand mit Kartennummer (z. B. `025/165`) und Set-Kürzel. Ein Offline-Kartenindex (`data/`) ordnet Nummer, Gesamtzahl, Set-Kürzel und Namen zu; einzelne falsch gelesene Ziffern werden toleriert.
 4. **Zusammenführen:** Bild- und Texthinweise werden gewichtet kombiniert. Das Bild findet die Karte auch ohne lesbaren Text, der Text entscheidet zwischen Nachdrucken mit gleichem Motiv und zwischen japanischer und internationaler Ausgabe.
 5. **Sprache:** Neben Sprachcode, Kartenbegriffen und Namen vergleicht HoloScan die grobe Textstruktur des Fotos mit vorberechneten Signaturen derselben Karte in jeder Sprache (`data/vision/lang/`).
 6. Preise und Kartendetails kommen live von [TCGdex](https://tcgdex.dev), das den Cardmarket-Preisguide täglich übernimmt.
 
-Beim ersten Scan werden Bildmodell und Index einmalig geladen (ca. 25 MB) und danach offline aus dem Cache genutzt. In „Mehr“ lässt sich die Bilderkennung abschalten.
+Beim ersten Scan werden Bildmodell und Index einmalig geladen (ca. 30 MB) und danach offline aus dem Cache genutzt. In „Mehr“ lässt sich die Bilderkennung abschalten.
 
-Gemessen an 160 simulierten Handyfotos (Spiegelungen, Hüllen, Holo-Glanz, Unschärfe, Schräglage; 3 Schwierigkeitsstufen): Die reine Texterkennung fand 34 % der Karten, die Kombination aus Bild- und Texterkennung 91 %.
+Gemessen an je 160 simulierten Handyfotos (Spiegelungen, Hüllen, Holo-Glanz, Unschärfe, Schräglage; 3 Schwierigkeitsstufen): Die reine Texterkennung fand 34 % der Karten. Mit Bild- und Texterkennung sind es 99 % (Karte und Sprache richtig: 95 %); bei Karten im Toploader mit Fingern am Rand 96 % (Karte und Sprache: 87 %).
 
 Hinweis zu Zuständen: Cardmarket veröffentlicht nur den Preisguide (Trend, Ab-Preis, Durchschnitte) und keine Preise je Zustand; die einzelnen Angebote sind nicht frei abrufbar. Die Zustandspreise in HoloScan sind deshalb Richtwerte, die echten Angebote öffnet der Link der jeweiligen Zeile. Der Sammlungswert rechnet mit dem Zustand jeder Karte.
 
@@ -107,7 +107,7 @@ js/store.js, js/db.js        Sammlung, Verlauf, Einstellungen (IndexedDB)
 js/ui/*                      Ansichten (Scanner, Ergebnis, Sammlung, Suche, Mehr)
 data/                        Offline-Kartenindex (generiert)
 data/vision/                 Bildindex (int8-Vektoren) und Sprach-Signaturen (generiert)
-models/card-embed.onnx       Bildmodell + gelerntes Whitening
+models/card-embed.onnx       Bildmodell: DINOv2-small (int8) + gelerntes Whitening
 scripts/build-index.mjs      Erzeugt den Kartenindex aus TCGdex
 scripts/build-vision-index.py  Erzeugt Bildindex und Sprach-Signaturen
 vendor/tesseract/            Tesseract.js (Apache-2.0)
@@ -117,7 +117,7 @@ vendor/tesseract/            Tesseract.js (Apache-2.0)
 
 - Kartendaten, Bilder und Preise: [TCGdex](https://tcgdex.dev) (Cardmarket-Preisguide, TCGplayer)
 - Texterkennung: [Tesseract.js](https://github.com/naptha/tesseract.js), Apache-2.0 (`vendor/tesseract/LICENSE.md`)
-- Bildmodell: [MobileNetV4](https://huggingface.co/timm/mobilenetv4_conv_small.e2400_r224_in1k) (timm), Apache-2.0, ergänzt um eine eigene Whitening-Projektion
+- Bildmodell: [DINOv2](https://github.com/facebookresearch/dinov2) von Meta AI, Apache-2.0 (ONNX-Fassung von [onnx-community/dinov2-small](https://huggingface.co/onnx-community/dinov2-small), ergänzt um eine eigene Whitening-Projektion)
 - Laufzeit: [ONNX Runtime Web](https://github.com/microsoft/onnxruntime), MIT (über jsDelivr)
 - Schrift: [Outfit](https://fonts.google.com/specimen/Outfit), SIL Open Font License
 

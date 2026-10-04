@@ -87,7 +87,7 @@ export async function renderMore() {
         <div class="row"><span class="row-icon">${I.star}</span><span class="row-main"><span class="row-title">Zustand</span><div class="row-sub">Standard für neue Karten, Serienscan und Angebote</div></span>
           ${select('set-condition', CONDITIONS.map((c) => [c.id, c.label]), settings.condition)}</div>
         <button class="row" data-action="cond-factors"><span class="row-icon">${I.percent}</span><span class="row-main"><span class="row-title">Preise je Zustand</span><div class="row-sub">${esc(CONDITIONS.filter((c) => c.id > 2).map((c) => `${c.short} ${Math.round(conditionFactor(c.id) * 100)} %`).join(' · '))}</div></span></button>
-        <div class="row"><span class="row-icon">${I.eye}</span><span class="row-main"><span class="row-title">Bilderkennung</span><div class="row-sub">Erkennt Karte und Sprache am Bild, auch wenn Text unleserlich ist – lädt einmalig ca. 25 MB</div></span>${sw('set-vision', settings.vision)}</div>
+        <div class="row"><span class="row-icon">${I.eye}</span><span class="row-main"><span class="row-title">Bilderkennung</span><div class="row-sub">Erkennt Karte und Sprache am Bild, auch wenn Text unleserlich ist – lädt einmalig ca. 30 MB</div></span>${sw('set-vision', settings.vision)}</div>
         <div class="row"><span class="row-icon">${I.dollar}</span><span class="row-main"><span class="row-title">TCGplayer-Preis zeigen</span><div class="row-sub">US-Marktpreis in Dollar als Vergleich</div></span>${sw('set-showUSD', settings.showUSD)}</div>
         <div class="row"><span class="row-icon">${I.vibe}</span><span class="row-main"><span class="row-title">Vibration</span><div class="row-sub">Haptisches Feedback beim Scannen</div></span>${sw('set-haptics', settings.haptics)}</div>
         ${
@@ -122,7 +122,7 @@ export async function renderMore() {
       <img src="assets/icons/icon.svg" alt="">
       <div><b style="color:var(--text)">HoloScan</b> · Version ${APP_VERSION}</div>
       ${info?.generated ? `<div>Kartenindex vom ${esc(date(info.generated))} · ${Object.values(info.langs || {}).reduce((a, b) => Math.max(a, b), 0).toLocaleString('de-DE')} Karten</div>` : ''}
-      <div>Kartendaten & Preise: <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> (Cardmarket-Preisguide) · Texterkennung: Tesseract.js · Bilderkennung: ONNX Runtime</div>
+      <div>Kartendaten & Preise: <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> (Cardmarket-Preisguide) · Texterkennung: Tesseract.js · Bilderkennung: DINOv2 (Meta), ONNX Runtime</div>
       <div style="margin-top:8px">Inoffizielles Fanprojekt. Pokémon und alle zugehörigen Namen sind Marken von Nintendo, Creatures Inc., GAME FREAK und The Pokémon Company. Nicht verbunden mit Cardmarket. Preise ohne Gewähr.</div>
     </div>`;
   bind();
@@ -183,7 +183,7 @@ function bind() {
       sub.textContent = 'Texterkennung wird geladen …';
       let ok = await warmup();
       if (ok && settings.vision) {
-        sub.textContent = 'Bilderkennung wird geladen (ca. 25 MB) …';
+        sub.textContent = 'Bilderkennung wird geladen (ca. 30 MB) …';
         ok = await warmupVision();
       }
       sub.textContent = ok ? 'Fertig – Suche und Erkennung funktionieren jetzt offline.' : 'Index gespeichert, Erkennung fehlgeschlagen – bitte erneut versuchen.';
