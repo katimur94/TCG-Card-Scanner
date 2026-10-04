@@ -85,15 +85,17 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
   if (autoLang && best?.group === 'intl' && !parsed.printedLang && vision?.quad) {
     imageLang = await languageFromImage(vision.view, best.setId, best.localId).catch(() => null);
     const ocrLang = det.lang && det.lang !== 'ja' ? det.lang : null;
-    if (imageLang && imageLang.margin >= 0.02 && imageLang.best !== cardLang) {
+    if (imageLang && imageLang.best !== cardLang) {
       const s = imageLang.scores;
-      const near = (l) => l in s && s[l] >= s[imageLang.best] - 0.08;
+      const near = (l, tol) => l in s && s[l] >= s[imageLang.best] - tol;
       const byName = langSource === 'am Kartennamen erkannt';
-      // gelesener Text (Sprachbegriffe, eindeutiger Name) behält Vorrang, wenn das Bild ihn nicht klar widerlegt
-      const textConfirmed = (ocrLang && (!(ocrLang in s) || (det.confidence >= 0.7 && near(ocrLang)))) || (byName && (!(cardLang in s) || near(cardLang)));
-      // ohne Vergleichsbild in der Standardsprache lässt sich diese nicht ausschließen
-      const unverifiable = !ocrLang && !byName && !(intlFallback in s);
-      if (!textConfirmed && !unverifiable) {
+      // gelesene Sprachbegriffe behalten Vorrang, wenn das Bild sie nicht klar widerlegt
+      const textConfirmed = ocrLang && (!(ocrLang in s) || (det.confidence >= 0.7 && near(ocrLang, 0.08)));
+      // ein (oft nur teilweise gelesener) Name zählt nur bei fast gleichem Bildwert
+      const nameConfirmed = byName && (!(cardLang in s) || near(cardLang, 0.01));
+      // ohne Text: Standardsprache nur bei Gleichstand – oder wenn es kein Vergleichsbild in ihr gibt
+      const fallbackKept = !ocrLang && !byName && (intlFallback in s ? near(intlFallback, 0.005) : imageLang.margin < 0.1);
+      if (!textConfirmed && !nameConfirmed && !fallbackKept) {
         cardLang = imageLang.best;
         langSource = 'am Kartenbild erkannt';
       }
