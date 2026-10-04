@@ -40,7 +40,8 @@ async function loadSession() {
   ort.env.wasm.wasmPaths = ORT_BASE;
   // GitHub Pages liefert keine COOP/COEP-Header -> kein SharedArrayBuffer, also ein Thread
   ort.env.wasm.numThreads = 1;
-  const res = await fetch(modelUrl(await getMeta()));
+  // niedrige Priorität: Preise und Kartendaten sollen nicht auf den großen Download warten
+  const res = await fetch(modelUrl(await getMeta()), { priority: 'low' });
   if (!res.ok) throw new Error(`Modell: HTTP ${res.status}`);
   const session = await ort.InferenceSession.create(new Uint8Array(await res.arrayBuffer()), {
     executionProviders: ['wasm'],
@@ -51,7 +52,7 @@ async function loadSession() {
 
 async function loadIndex() {
   const meta = await getMeta();
-  const res = await fetch(indexUrl(meta));
+  const res = await fetch(indexUrl(meta), { priority: 'low' });
   if (!res.ok) throw new Error(`Index: HTTP ${res.status}`);
   const vectors = new Int8Array(await res.arrayBuffer());
   const rows = [];

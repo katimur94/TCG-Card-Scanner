@@ -28,6 +28,7 @@ const SHELL = [
   'js/identify.js',
   'js/recognize.js',
   'js/vision.js',
+  'js/cardmarket.js',
   'js/deal.js',
   'js/pricing.js',
   'js/camera.js',
@@ -134,8 +135,11 @@ async function versioned(req) {
 
 async function networkFirst(req, cacheName, timeoutMs, fallbackUrl, maxEntries) {
   const cache = await caches.open(cacheName);
+  const network = fetch(req);
+  network.catch(() => {}); // Fehler nach Cache-Antwort nicht als unbehandelt melden
+  const cached = () => cache.match(req, { ignoreSearch: !!fallbackUrl }).then((hit) => hit || (fallbackUrl && cache.match(fallbackUrl)));
   try {
-    const res = await withTimeout(fetch(req), timeoutMs);
+    const res = await withTimeout(network, timeoutMs);
     if (res.ok) {
       cache.put(req, res.clone()).then(() => maxEntries && trim(cache, maxEntries));
       return res;
@@ -143,8 +147,14 @@ async function networkFirst(req, cacheName, timeoutMs, fallbackUrl, maxEntries) 
     const hit = await cache.match(req);
     return hit || res;
   } catch (err) {
-    const hit = (await cache.match(req, { ignoreSearch: !!fallbackUrl })) || (fallbackUrl && (await cache.match(fallbackUrl)));
+    const hit = await cached();
     if (hit) return hit;
+    // Langsames Netz (z. B. während das Bildmodell lädt): ohne Cache weiter auf die Antwort warten
+    if (err?.message === 'timeout') {
+      const res = await network;
+      if (res.ok) cache.put(req, res.clone()).then(() => maxEntries && trim(cache, maxEntries));
+      return res;
+    }
     throw err;
   }
 }

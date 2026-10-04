@@ -17,7 +17,8 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 - **Cardmarket-Preise** aus dem offiziellen Preisguide: Preistrend, Ab-Preis, Ø Verkaufspreis, Ø 1/7/30 Tage und die Tendenz (7 gegenüber 30 Tagen)
 - **Varianten** mit eigenem Preis: Normal, Holo, Reverse Holo, Pokéball- und Meisterball-Muster, 1. Edition …
 - **Preis nach Zustand** für alle Cardmarket-Zustände (MT, NM, EX, GD, LP, PL, PO): Richtwert je Zustand (Preistrend = NM, übliche Abschläge, in „Mehr“ anpassbar) und je Zustand ein Direktlink zu den echten Cardmarket-Angeboten – gefiltert auf Kartensprache und Zustand, günstigstes zuerst
-- **Sprachgerechte Cardmarket-Links**: öffnet das Produkt direkt mit Filter auf die Kartensprache und den gewünschten Mindestzustand
+- **Cardmarket-Links**: „Alle Angebote“ öffnet das Produkt direkt (ohne Filter, damit die Liste nie leer ist); zusätzlich gefiltert auf Kartensprache und Mindestzustand
+- **Preise auch ohne TCGdex-Preis**: Fehlt bei TCGdex der Cardmarket-Preis (u. a. ältere Promos, Shiny Vault, Gym, Trainer-Kits), holt HoloScan ihn aus Cardmarkets öffentlichem Preisguide – zugeordnet über Kartenname, Attacken und Erweiterung, täglich aktualisiert
 - **Japanische Karten** werden als eigene Cardmarket-Produkte mit eigenem Preis erkannt
 - **Kartenbild immer da**: Fehlt ein Bild in der Datenbank, nimmt HoloScan dein eigenes Scan-Foto („Dein Scan“) und speichert es mit in Sammlung und Verlauf; bei Suchtreffern ohne Bild springt das Bild einer anderen Ausgabe ein (z. B. „Bild: EN-Ausgabe“) oder ein Link zum Bild auf Cardmarket
 - **Kauf-Check**: Preis eingeben, zu dem du die Karte kaufen könntest (z. B. auf dem Flohmarkt) – HoloScan vergleicht mit dem Cardmarket-Wert im gewählten Zustand und sagt sofort, ob es ein Top-Deal, ein guter Kauf, ein fairer Preis oder zu teuer ist. Dazu: Ersparnis, möglicher Gewinn beim Weiterverkauf (nach 5 % Cardmarket-Provision und Verpackung), Verhandlungsziele und eine Investment-Einschätzung (Kursentwicklung, Set-Alter, Seltenheit, Wertniveau, Schwankung) mit Begründung. Beim Hinzufügen zur Sammlung wird der Preis als Einkaufspreis übernommen. Keine Anlageberatung.
@@ -110,12 +111,15 @@ data/vision/                 Bildindex (int8-Vektoren) und Sprach-Signaturen (ge
 models/card-embed.onnx       Bildmodell: DINOv2-small (int8) + gelerntes Whitening
 scripts/build-index.mjs      Erzeugt den Kartenindex aus TCGdex
 scripts/build-vision-index.py  Erzeugt Bildindex und Sprach-Signaturen
+scripts/build-cardmarket.mjs   Ersatzpreise aus Cardmarkets Preisguide (data/cm/, täglich im Workflow)
+js/cardmarket.js             Zuordnung Karte -> Cardmarket-Produkt für die Ersatzpreise
 vendor/tesseract/            Tesseract.js (Apache-2.0)
 ```
 
 ## Datenquellen und Lizenzen
 
 - Kartendaten, Bilder und Preise: [TCGdex](https://tcgdex.dev) (Cardmarket-Preisguide, TCGplayer)
+- Ersatzpreise: öffentlicher [Cardmarket](https://www.cardmarket.com)-Preisguide und Produktkatalog
 - Texterkennung: [Tesseract.js](https://github.com/naptha/tesseract.js), Apache-2.0 (`vendor/tesseract/LICENSE.md`)
 - Bildmodell: [DINOv2](https://github.com/facebookresearch/dinov2) von Meta AI, Apache-2.0 (ONNX-Fassung von [onnx-community/dinov2-small](https://huggingface.co/onnx-community/dinov2-small), ergänzt um eine eigene Whitening-Projektion)
 - Laufzeit: [ONNX Runtime Web](https://github.com/microsoft/onnxruntime), MIT (über jsDelivr)

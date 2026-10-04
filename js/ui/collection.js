@@ -5,7 +5,7 @@ import { getCard, findSet } from '../api.js';
 import { variantsOf, conditionInfo, cardmarketUrl, conditionValue, conditionFactor } from '../pricing.js';
 import { LANGS, langInfo } from '../lang.js';
 import { $, esc, money, percent, date, haptic, download } from '../util.js';
-import { showCard, candidateFromItem, cardNumber, thumbOf } from './result.js';
+import { showCard, candidateFromItem, cardNumber, thumbOf, hasCardmarket, addCardmarketFallback } from './result.js';
 import { historyChart } from './charts.js';
 import { toast } from './toast.js';
 import { openSheet, closeSheet } from './sheet.js';
@@ -141,6 +141,7 @@ export async function refreshPrices({ silent = false } = {}) {
       const { group, id } = its[0];
       try {
         const card = await getCard(group === 'ja' ? 'ja' : 'en', id, { fresh: true });
+        if (group !== 'ja' && !hasCardmarket(card)) await addCardmarketFallback(card, its[0]).catch(() => null);
         const variants = variantsOf(card);
         for (const it of its) {
           const v = variants.find((x) => x.key === it.variantKey) || variants[0];

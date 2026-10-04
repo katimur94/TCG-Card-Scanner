@@ -80,6 +80,8 @@ function pick(cm, reverse) {
     updated: cm.updated,
     idProduct: cm.idProduct,
     unit: cm.unit || 'EUR',
+    source: cm.source, // 'cardmarket' = Ersatz direkt aus Cardmarkets Preisguide (TCGdex ohne Preis)
+    ambiguous: !!cm.ambiguous,
   };
   // Hauptwert: Preistrend, sonst der beste verfügbare Durchschnitt
   const kind = VALUE_KINDS.find(([k]) => out[k]);

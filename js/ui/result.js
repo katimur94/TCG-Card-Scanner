@@ -1,6 +1,7 @@
 // Ergebnis-Ansicht einer Karte: Bild, Sprache, Varianten, Cardmarket-Preise, Aktionen.
 
-import { getCard, imageUrl, guessImage, loadSets, findCards } from '../api.js';
+import { getCard, imageUrl, guessImage, loadSets, findCards, loadCardIndex } from '../api.js';
+import { cardmarketPrice } from '../cardmarket.js';
 import { LANGS, LANG, langInfo } from '../lang.js';
 import { variantsOf, momentum, cardmarketUrl, CONDITIONS, conditionInfo, conditionFactor, conditionValue } from '../pricing.js';
 import { settings, addItem, updateItem, removeItem, recordPrice, priceHistory, priceKey, emit } from '../store.js';
@@ -35,6 +36,7 @@ export async function loadCardData(cand, lang) {
     const [d, p] = await Promise.all([dl === 'en' ? null : getCard(dl, cand.id).catch(() => null), getCard('en', cand.id)]);
     priceCard = p;
     display = d || p;
+    if (p && !hasCardmarket(p)) await addCardmarketFallback(p, cand).catch(() => null);
   }
   if (!priceCard && !display) throw new Error('Karte konnte nicht geladen werden.');
   const variants = variantsOf(priceCard || display);
@@ -42,6 +44,18 @@ export async function loadCardData(cand, lang) {
   // Japanische Karte ohne Bild: Bild der englischen Ausgabe als Ersatz
   const altImage = group === 'ja' && !shown.image ? await englishImageFor(shown, cand).catch(() => null) : null;
   return { display: shown, priceCard: priceCard || display, variants, altImage };
+}
+
+export const hasCardmarket = (card) => !!(card.pricing?.cardmarket?.idProduct || card.variants_detailed?.some((v) => v.pricing?.cardmarket?.idProduct));
+
+/** Kein Cardmarket-Preis bei TCGdex: Preis direkt aus Cardmarkets Preisguide ergänzen (gleiches Format). */
+export async function addCardmarketFallback(card, cand) {
+  const index = await loadCardIndex('en');
+  const sameName = (index[cand.setId] || []).filter((r) => r[1] === card.name).map((r) => r[0]);
+  const cm = await cardmarketPrice(card, cand.setId, sameName);
+  if (!cm) return;
+  card.pricing = { ...(card.pricing || {}), cardmarket: cm };
+  for (const v of card.variants_detailed || []) v.pricing = { ...(v.pricing || {}), cardmarket: cm };
 }
 
 // Seltenheiten mit Standard-Motiv – nur dort ist das Bild der englischen Ausgabe dasselbe Motiv
@@ -340,6 +354,8 @@ function render(state) {
       search: p.name || d.name,
     });
   const cmLink = linkFor(condition);
+  // Alle Angebote ohne Sprach-/Zustandsfilter – mit Filtern ist die Liste bei seltenen Karten oft leer
+  const cmAll = cardmarketUrl({ idProduct: cm?.idProduct, siteLang: settings.siteLang, search: p.name || d.name });
   const isJa = cand.group === 'ja';
   const langNote = isJa
     ? 'Japanische Karten sind bei Cardmarket <b>eigene Produkte</b> – die Preise gelten für die japanische Ausgabe.'
@@ -354,7 +370,7 @@ function render(state) {
   return `
     <div class="result-hero">
       <div class="holo-card" data-action="zoom">
-        ${imgTag(images.urls[0], images.urls.slice(1), { alt: d.name, lazy: false, placeholder: noImage(cmLink), altUrl: images.altUrl }) || noImage(cmLink)}
+        ${imgTag(images.urls[0], images.urls.slice(1), { alt: d.name, lazy: false, placeholder: noImage(cmAll), altUrl: images.altUrl }) || noImage(cmAll)}
         <span class="img-badge b-scan" title="Für diese Karte gibt es kein Bild in der Datenbank – gezeigt wird dein Scan">Dein Scan</span>
         <span class="img-badge b-alt" title="Für diese Karte gibt es kein Bild – gezeigt wird die englische Ausgabe">Bild: EN-Ausgabe</span>
       </div>
@@ -395,7 +411,7 @@ function render(state) {
         <span class="price-value" data-count="${cm?.value ?? ''}">${cm?.value ? money(cm.value) : '–'}</span>
         ${mom != null ? `<span class="delta ${mom > 0.03 ? 'up' : mom < -0.03 ? 'down' : 'flat'}" title="Ø 7 Tage gegenüber Ø 30 Tage">${mom > 0.03 ? '▲' : mom < -0.03 ? '▼' : '■'} ${esc(percent(mom))}</span>` : ''}
       </div>
-      <div class="price-caption">${cm?.value ? `${esc(v.label)} · Preisguide in Euro` : 'Für diese Variante liegt kein Cardmarket-Preis vor.'}</div>
+      <div class="price-caption">${cm?.value ? `${esc(v.label)} · ${cm.source === 'cardmarket' ? 'direkt aus dem Cardmarket-Preisguide' : 'Preisguide in Euro'}${cm.ambiguous ? ' · Zuordnung nicht eindeutig' : ''}` : 'Für diese Variante liegt kein Cardmarket-Preis vor.'}</div>
       ${
         cm
           ? `<div class="stats">
@@ -428,7 +444,8 @@ function render(state) {
     </div>
 
     <div class="actions">
-      <a class="btn btn-gold btn-span" href="${esc(cmLink)}" target="_blank" rel="noopener">${ICON.ext} Auf Cardmarket ansehen (${esc(li.short)} · ab ${esc(conditionInfo(condition).short)})</a>
+      <a class="btn btn-gold btn-span" href="${esc(cmAll)}" target="_blank" rel="noopener">${ICON.ext} ${cm?.idProduct ? 'Alle Angebote auf Cardmarket' : 'Auf Cardmarket suchen'}</a>
+      ${cm?.idProduct ? `<a class="btn btn-span" href="${esc(cmLink)}" target="_blank" rel="noopener">${ICON.ext} Nur ${esc(li.label)} · ab ${esc(conditionInfo(condition).short)}</a>` : ''}
       ${
         item
           ? ''

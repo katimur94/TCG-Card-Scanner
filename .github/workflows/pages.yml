@@ -1,6 +1,7 @@
 name: GitHub Pages
 
 # Veröffentlicht HoloScan bei jedem Push auf den Standard-Branch.
+# Täglich werden die Cardmarket-Ersatzpreise (für Karten ohne Preis bei TCGdex) erneuert.
 # Montags wird zusätzlich der Kartenindex (neue Sets) aus TCGdex aktualisiert
 # und der Bildindex der Bilderkennung um neue Karten ergänzt.
 
@@ -9,6 +10,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 4 * * 1'
+    - cron: '47 5 * * *'
 
 permissions:
   contents: read
@@ -31,23 +33,33 @@ jobs:
           node-version: 22
 
       - name: Kartenindex aktualisieren
-        if: github.event_name != 'push'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1'
         timeout-minutes: 20
         # Schlägt der Abruf fehl, wird der eingecheckte Index verwendet.
         run: node scripts/build-index.mjs || git checkout -- data
 
       - uses: actions/setup-python@v7
-        if: github.event_name != 'push'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1'
         with:
           python-version: '3.12'
 
       - name: Bildindex für neue Karten ergänzen
-        if: github.event_name != 'push'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1'
         timeout-minutes: 40
         # Berechnet nur Karten, die im eingecheckten Bildindex noch fehlen.
         run: |
           pip install --quiet onnxruntime opencv-python-headless numpy
           python3 scripts/build-vision-index.py || git checkout -- data/vision
+
+      - name: Cardmarket-Preisguide laden
+        timeout-minutes: 30
+        # Set-Zuordnung nur wöchentlich neu ermitteln; schlägt der Abruf fehl, fehlen nur die Ersatzpreise.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event.schedule }}" = "17 4 * * 1" ]; then
+            node scripts/build-cardmarket.mjs --expansions || { git checkout -- data/cm; node scripts/build-cardmarket.mjs || true; }
+          else
+            node scripts/build-cardmarket.mjs || true
+          fi
 
       - name: Build-ID für Service-Worker-Updates setzen
         run: sed -i "s/__BUILD_ID__/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" sw.js
