@@ -594,10 +594,26 @@ export async function languageFromImage(view, setId, localId) {
  */
 export async function visualSearch(canvas, { k = 24, quad } = {}) {
   const t0 = performance.now();
-  const found = cardView(canvas, quad);
-  const { view } = found;
-  quad = found.quad;
-  const vec = await embedCard(view);
-  const matches = await nearestCards(vec, k);
-  return { matches, quad, view, ms: Math.round(performance.now() - t0) };
+  if (quad === undefined) quad = findCardQuad(canvas);
+  // Steckt die Karte in einem Toploader oder einer Hülle, findet die Kantensuche oft deren Rand.
+  // Darum zusätzlich engere Ausschnitte (typischer Toploader: seitlich und oben mehr Spiel) prüfen
+  // und den Ausschnitt mit dem eindeutigsten Treffer nehmen.
+  const quads = quad ? [quad, insetQuad(quad, 0.05, 0.05, 0.02), insetQuad(quad, 0.085, 0.09, 0.03)] : [null];
+  let best = null;
+  for (const q of quads) {
+    const view = q ? warpCard(canvas, q) : innerCrop(canvas);
+    const matches = await nearestCards(await embedCard(view), k);
+    if (!best || matches[0].sim > best.matches[0].sim) best = { matches, quad: q, view };
+  }
+  return { ...best, ms: Math.round(performance.now() - t0) };
+}
+
+/** Viereck nach innen verkleinern (Anteile der Breite seitlich, der Höhe oben/unten). */
+function insetQuad(q, side, top, bottom) {
+  const at = (u, v) => {
+    const x = (1 - v) * ((1 - u) * q[0][0] + u * q[1][0]) + v * ((1 - u) * q[3][0] + u * q[2][0]);
+    const y = (1 - v) * ((1 - u) * q[0][1] + u * q[1][1]) + v * ((1 - u) * q[3][1] + u * q[2][1]);
+    return [x, y];
+  };
+  return [at(side, top), at(1 - side, top), at(1 - side, 1 - bottom), at(side, 1 - bottom)];
 }
