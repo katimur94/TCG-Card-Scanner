@@ -6,6 +6,7 @@ import { CONDITIONS, DEFAULT_CONDITION_FACTORS, conditionFactor } from '../prici
 import { indexInfo, loadCardIndex, loadSets } from '../api.js';
 import { warmup } from '../ocr.js';
 import { warmupVision } from '../vision.js';
+import { readCardAI, DEFAULT_AI_MODEL } from '../ai.js';
 import { $, esc, date, haptic } from '../util.js';
 import { importJSON } from './collection.js';
 import { openSheet, closeSheet } from './sheet.js';
@@ -36,6 +37,7 @@ const I = {
   clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
   percent: '<svg viewBox="0 0 24 24"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>',
+  spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
 };
 
@@ -99,6 +101,30 @@ export async function renderMore() {
     </div>
 
     <div class="group">
+      <div class="group-title">KI-Leser (Gemma)</div>
+      <div class="note ai-box">
+        <p style="margin:0 0 10px">Ein Bild-Sprachmodell liest Name, Nummer und Sprache der Karte – hilft bei Spiegelungen, Toploadern und unklarer Sprache. Kostenlos mit eigenem <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter-Schlüssel</a>.</p>
+        <div class="field">
+          <label for="set-aiKey">API-Schlüssel</label>
+          <div class="key-row">
+            <input id="set-aiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-or-v1-…" value="${esc(settings.aiKey || '')}">
+            <button class="btn btn-small" data-action="ai-show" type="button" aria-label="Schlüssel anzeigen">${I.eye}</button>
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="set-aiModel">Modell</label>
+          <input id="set-aiModel" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(settings.aiModel || DEFAULT_AI_MODEL)}">
+        </div>
+        <div class="key-row" style="margin-top:10px">
+          ${select('set-aiMode', [['auto', 'Nur wenn unsicher'], ['always', 'Bei jedem Scan']], settings.aiMode)}
+          <button class="btn btn-gold btn-small" data-action="ai-test" type="button">Testen</button>
+        </div>
+        <p class="ai-status" style="margin:10px 0 0">${settings.aiKey ? '✓ Schlüssel gespeichert – der KI-Leser ist aktiv.' : 'Ohne Schlüssel ist der KI-Leser aus.'}</p>
+        <p style="margin:8px 0 0;color:var(--text-3);font-size:12px">Der Schlüssel bleibt nur auf diesem Gerät. Beim Einsatz wird das Bild der Karte an OpenRouter und den Modellanbieter gesendet. Kostenlose Modelle haben ein Tageslimit.</p>
+      </div>
+    </div>
+
+    <div class="group">
       <div class="group-title">Daten</div>
       <div class="list">
         <button class="row" data-action="export"><span class="row-icon">${I.down}</span><span class="row-main"><span class="row-title">Sammlung exportieren</span><div class="row-sub">CSV für Excel oder JSON-Backup</div></span></button>
@@ -143,6 +169,20 @@ function bind() {
   onChange('set-showUSD', 'showUSD');
   onChange('set-haptics', 'haptics');
   onChange('set-vision', 'vision');
+  onChange('set-aiMode', 'aiMode');
+  const aiStatus = (t) => {
+    const el = root.querySelector('.ai-status');
+    if (el) el.textContent = t;
+  };
+  root.querySelector('#set-aiKey')?.addEventListener('change', async (e) => {
+    const key = e.target.value.trim();
+    await saveSettings({ aiKey: key });
+    aiStatus(key ? '✓ Schlüssel gespeichert – der KI-Leser ist aktiv.' : 'Ohne Schlüssel ist der KI-Leser aus.');
+    haptic(6);
+  });
+  root.querySelector('#set-aiModel')?.addEventListener('change', async (e) => {
+    await saveSettings({ aiModel: e.target.value.trim() || DEFAULT_AI_MODEL });
+  });
 
   const act = (name, fn) => root.querySelector(`[data-action="${name}"]`)?.addEventListener('click', fn);
   act('install', async () => {
@@ -163,6 +203,34 @@ function bind() {
     renderMore();
   });
   act('cond-factors', openConditionFactors);
+  act('ai-show', () => {
+    const el = root.querySelector('#set-aiKey');
+    el.type = el.type === 'password' ? 'text' : 'password';
+  });
+  act('ai-test', async (e) => {
+    const btn = e.currentTarget;
+    const key = root.querySelector('#set-aiKey').value.trim();
+    if (!key) return aiStatus('Bitte zuerst einen Schlüssel eintragen.');
+    await saveSettings({ aiKey: key, aiModel: root.querySelector('#set-aiModel').value.trim() || DEFAULT_AI_MODEL });
+    btn.disabled = true;
+    aiStatus('Teste Verbindung …');
+    try {
+      // Testbild: HoloScan-Icon (ohne fremde Bilder, daher ohne CORS-Probleme)
+      const img = new Image();
+      img.src = 'assets/icons/icon-192.png';
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      const r = await readCardAI(c, { key, model: settings.aiModel });
+      aiStatus(`✓ Funktioniert (${r.model}, ${(r.ms / 1000).toFixed(1)} s) – der KI-Leser ist aktiv.`);
+    } catch (err) {
+      aiStatus(`✗ ${err.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  });
   act('import', () => root.querySelector('#import-input').click());
   root.querySelector('#import-input').addEventListener('change', (e) => {
     const f = e.target.files?.[0];

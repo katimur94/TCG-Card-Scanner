@@ -116,6 +116,8 @@ function freezeCamera() {
   stage().classList.add('is-frozen');
 }
 
+let aiErrorShown = false;
+
 async function process(canvas, { fitToText = false } = {}) {
   if (busy) return;
   busy = true;
@@ -129,9 +131,14 @@ async function process(canvas, { fitToText = false } = {}) {
       scanLang: settings.scanLang,
       fallback: settings.fallbackLang,
       useVision: settings.vision,
+      ai: settings.aiKey ? { key: settings.aiKey, model: settings.aiModel, mode: settings.aiMode } : null,
       onStatus: (text, p) => text && setStatus(text, p != null && p < 1 && p > 0 ? `${Math.round(p * 100)} %` : ''),
     });
     window.__holoscanLast = result;
+    if (result.aiError && !aiErrorShown) {
+      aiErrorShown = true;
+      toast(`KI-Leser: ${result.aiError}`, { type: 'info', ms: 4000 });
+    }
     console.debug('[HoloScan]', result);
     const { cands, best, cardLang, langSource, parsed } = result;
     // eigenes Foto der Karte – wird gezeigt, wenn es in der Datenbank kein Bild gibt

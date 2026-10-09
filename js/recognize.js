@@ -7,13 +7,14 @@ import { detectLanguage } from './lang.js';
 import { loadSets } from './api.js';
 import { visualSearch, visionReady, findCardQuad, straightCard, languageFromImage } from './vision.js';
 import { sleep } from './util.js';
+import { readCardAI, aiLines } from './ai.js';
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{fitToText?: boolean, scanLang?: string, fallback?: string, useVision?: boolean, onStatus?: Function}} opts
+ * @param {{fitToText?: boolean, scanLang?: string, fallback?: string, useVision?: boolean, ai?: {key, model, mode}, onStatus?: Function}} opts
  * @returns {Promise<{cands: Array, best: object|null, cardLang: string, langSource: string, parsed, det, ocr, vision, ms: number}>}
  */
-export async function recognize(canvas, { fitToText = false, scanLang = 'auto', fallback = 'de', useVision = true, onStatus } = {}) {
+export async function recognize(canvas, { fitToText = false, scanLang = 'auto', fallback = 'de', useVision = true, ai = null, onStatus } = {}) {
   const t0 = performance.now();
   const idx = await loadSets();
   // Beim allerersten Scan wird das Modell evtl. noch geladen – dann nicht darauf warten
@@ -39,11 +40,40 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
   });
   onStatus?.('Karte wird gesucht …');
   const vision = await (visionWasReady ? visionP : Promise.race([visionP, sleep(1500).then(() => null)]));
+  let result = await analyze({ ocr, vision, idx, scanLang, fallback, onStatus });
+
+  // KI-Leser (optional): bei unsicherem Ergebnis die gerade gerückte Karte lesen lassen
+  if (ai?.key && (ai.mode === 'always' || isUncertain(result))) {
+    onStatus?.('KI liest die Karte …');
+    try {
+      const read = await readCardAI(vision?.view || canvas, ai);
+      const merged = { lines: [...aiLines(read), ...ocr.lines], text: '' };
+      merged.text = merged.lines.map((l) => l.text).join('\n');
+      result = { ...(await analyze({ ocr: merged, vision, idx, scanLang, fallback, onStatus, ai: read })), aiRead: read };
+    } catch (err) {
+      console.warn('[HoloScan] KI-Leser:', err);
+      result.aiError = err.message || String(err);
+    }
+  }
+  return { ...result, ocr, vision, ms: Math.round(performance.now() - t0) };
+}
+
+/** Unsicher = geringe Übereinstimmung, knapper Zweitplatzierter oder Sprache nicht aus dem Text gelesen. */
+function isUncertain({ best, cands, det, parsed }) {
+  if (!best || best.confidence < 0.75) return true;
+  if (cands[1] && cands[0].score - cands[1].score < 15) return true;
+  return best.group === 'intl' && !parsed.printedLang && !(det.lang && det.confidence >= 0.7);
+}
+
+/** Auswertung der gelesenen Zeilen + Bildtreffer -> Kandidaten und Kartensprache. */
+async function analyze({ ocr, vision, idx, scanLang, fallback, onStatus, ai = null }) {
   const parsed = parseCard(ocr, idx);
   const autoLang = scanLang === 'auto';
-  const det = autoLang
+  let det = autoLang
     ? detectLanguage(ocr.text, { printedLang: parsed.printedLang, lines: ocr.lines })
     : { lang: scanLang, confidence: 1, evidence: [], jaHint: scanLang === 'ja' ? 1 : 0 };
+  // Von der KI gelesene Sprache zählt wie ein Aufdruck
+  if (autoLang && ai?.language) det = { lang: ai.language, confidence: 0.95, evidence: ['KI'], jaHint: ai.language === 'ja' ? 1 : 0 };
   const cands = await identify(parsed, { lang: det.lang, fallback, jaHint: det.jaHint, visual: vision?.matches });
   const best = cands[0] || null;
 
@@ -55,7 +85,7 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
     langSource = 'fest eingestellt';
   } else if (det.lang) {
     cardLang = det.lang;
-    langSource = parsed.printedLang ? 'vom Aufdruck erkannt' : 'automatisch erkannt';
+    langSource = ai?.language ? 'von der KI gelesen' : parsed.printedLang ? 'vom Aufdruck erkannt' : 'automatisch erkannt';
   }
   if (best?.group === 'ja') {
     cardLang = 'ja';
@@ -65,7 +95,7 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
   }
 
   // Unsichere Sprache? Den gelesenen Namen mit allen Sprachversionen der Karte vergleichen.
-  if (autoLang && best?.group === 'intl' && !parsed.printedLang && (!det.lang || det.confidence < 0.7)) {
+  if (autoLang && !ai?.language && best?.group === 'intl' && !parsed.printedLang && (!det.lang || det.confidence < 0.7)) {
     onStatus?.('Sprache wird geprüft …');
     const nl = await nameLanguage(best, parsed).catch(() => null);
     if (nl && nl.score >= 0.75 && !(det.lang && nl.ties.includes(det.lang))) {
@@ -82,7 +112,7 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
   // Sprache am Kartenbild: Textstruktur des Fotos gegen dieselbe Karte in jeder Sprache
   // (hilft vor allem, wenn der Text zu unscharf zum Lesen ist)
   let imageLang = null;
-  if (autoLang && best?.group === 'intl' && !parsed.printedLang && vision?.quad) {
+  if (autoLang && !ai?.language && best?.group === 'intl' && !parsed.printedLang && vision?.quad) {
     imageLang = await languageFromImage(vision.view, best.setId, best.localId).catch(() => null);
     const ocrLang = det.lang && det.lang !== 'ja' ? det.lang : null;
     if (imageLang && imageLang.best !== cardLang) {
@@ -102,5 +132,5 @@ export async function recognize(canvas, { fitToText = false, scanLang = 'auto', 
     }
   }
 
-  return { cands, best, cardLang, langSource, parsed, det, ocr, vision, imageLang, ms: Math.round(performance.now() - t0) };
+  return { cands, best, cardLang, langSource, parsed, det, imageLang };
 }

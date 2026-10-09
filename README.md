@@ -9,6 +9,7 @@ Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. Holo
 - **Scannen per Kamera** mit Kartenrahmen, Taschenlampe und optionalem **Auto-Scan** (löst aus, sobald die Karte ruhig im Rahmen liegt)
 - **Bild- und Texterkennung kombiniert**: HoloScan findet die Kanten der Karte, rückt sie gerade und vergleicht sie mit rund 24.000 Kartenbildern (KI-Modell DINOv2, läuft im Browser). Die Texterkennung liest parallel Nummer, Set-Kürzel und Namen und unterscheidet so Nachdrucke mit gleichem Motiv. Dadurch werden Karten auch bei Spiegelungen, Hüllen, Holo-Glanz, schrägem Winkel oder unscharfem Foto erkannt
 - **Foto-Import** aus der Galerie: Foto mit zwei Fingern zoomen, verschieben und bei Bedarf drehen, bis die Karte im Rahmen liegt – gescannt wird genau der Rahmen; das Foto bleibt zum Nachjustieren stehen
+- **KI-Leser (optional)**: Ein Bild-Sprachmodell (Standard: Gemma 4 über [OpenRouter](https://openrouter.ai), kostenlos mit eigenem API-Schlüssel) liest bei unsicheren Scans Name, Nummer und Sprache der Karte. Schlüssel in „Mehr → KI-Leser“ eintragen; er bleibt nur auf dem Gerät, gesendet wird nur das Bild der gerade gerückten Karte
 - **Spracherkennung**: Deutsch, Englisch, Französisch, Spanisch, Italienisch, Portugiesisch und Japanisch, erkannt über
   - den aufgedruckten Sprachcode (z. B. „PAL DE“ ab Karmesin & Purpur),
   - Kartenbegriffe wie Schwäche/Weakness/Faiblesse, KP/HP/PV/PS,
@@ -100,6 +101,7 @@ js/parse.js                  Nummer, Set-Kürzel, Sprachcode, Name aus dem OCR-T
 js/lang.js                   Sprachen, Cardmarket-IDs, Spracherkennung
 js/identify.js               Zuordnung zum Kartenindex, unscharfe Suche
 js/vision.js                 Kartenkanten, Entzerrung, Bildsuche, Sprache am Bild
+js/ai.js                     KI-Leser (Bild-Sprachmodell über OpenRouter, optional)
 js/recognize.js              Gesamte Erkennungs-Pipeline
 js/api.js                    TCGdex-Client und Index-Laden
 js/pricing.js                Varianten, Preisfelder, Zustands-Richtwerte, Cardmarket-Links

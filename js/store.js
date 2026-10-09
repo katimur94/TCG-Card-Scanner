@@ -14,6 +14,9 @@ const DEFAULTS = {
   batch: false,
   showUSD: true,
   vision: true, // Bilderkennung (Modell wird einmalig geladen, ca. 30 MB)
+  aiKey: '', // OpenRouter-API-Schlüssel für den KI-Leser (bleibt nur auf diesem Gerät)
+  aiModel: 'google/gemma-4-31b-it:free',
+  aiMode: 'auto', // 'auto' = nur bei unsicherem Ergebnis, 'always' = bei jedem Scan
   conditionFactors: null, // eigene Abschläge je Zustand {id: Faktor}, sonst Standard
 };
 
