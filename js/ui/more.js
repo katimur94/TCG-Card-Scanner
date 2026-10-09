@@ -7,6 +7,7 @@ import { indexInfo, loadCardIndex, loadSets } from '../api.js';
 import { warmup } from '../ocr.js';
 import { warmupVision } from '../vision.js';
 import { readCardAI, DEFAULT_AI_MODEL } from '../ai.js';
+import { BUILTIN_AI_KEY } from '../ai-config.js';
 import { $, esc, date, haptic } from '../util.js';
 import { importJSON } from './collection.js';
 import { openSheet, closeSheet } from './sheet.js';
@@ -107,7 +108,7 @@ export async function renderMore() {
         <div class="field">
           <label for="set-aiKey">API-Schlüssel</label>
           <div class="key-row">
-            <input id="set-aiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-or-v1-…" value="${esc(settings.aiKey || '')}">
+            <input id="set-aiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${BUILTIN_AI_KEY ? 'optional – eingebauter Schlüssel aktiv' : 'sk-or-v1-…'}" value="${esc(settings.aiKey || '')}">
             <button class="btn btn-small" data-action="ai-show" type="button" aria-label="Schlüssel anzeigen">${I.eye}</button>
           </div>
         </div>
@@ -119,7 +120,7 @@ export async function renderMore() {
           ${select('set-aiMode', [['auto', 'Nur wenn unsicher'], ['always', 'Bei jedem Scan']], settings.aiMode)}
           <button class="btn btn-gold btn-small" data-action="ai-test" type="button">Testen</button>
         </div>
-        <p class="ai-status" style="margin:10px 0 0">${settings.aiKey ? '✓ Schlüssel gespeichert – der KI-Leser ist aktiv.' : 'Ohne Schlüssel ist der KI-Leser aus.'}</p>
+        <p class="ai-status" style="margin:10px 0 0">${settings.aiKey ? '✓ Eigener Schlüssel gespeichert – der KI-Leser ist aktiv.' : BUILTIN_AI_KEY ? '✓ Eingebauter Schlüssel aktiv – du musst nichts eintragen.' : 'Ohne Schlüssel ist der KI-Leser aus.'}</p>
         <p style="margin:8px 0 0;color:var(--text-3);font-size:12px">Der Schlüssel bleibt nur auf diesem Gerät. Beim Einsatz wird das Bild der Karte an OpenRouter und den Modellanbieter gesendet. Kostenlose Modelle haben ein Tageslimit.</p>
       </div>
     </div>
@@ -177,7 +178,7 @@ function bind() {
   root.querySelector('#set-aiKey')?.addEventListener('change', async (e) => {
     const key = e.target.value.trim();
     await saveSettings({ aiKey: key });
-    aiStatus(key ? '✓ Schlüssel gespeichert – der KI-Leser ist aktiv.' : 'Ohne Schlüssel ist der KI-Leser aus.');
+    aiStatus(key ? '✓ Eigener Schlüssel gespeichert – der KI-Leser ist aktiv.' : BUILTIN_AI_KEY ? '✓ Eingebauter Schlüssel aktiv.' : 'Ohne Schlüssel ist der KI-Leser aus.');
     haptic(6);
   });
   root.querySelector('#set-aiModel')?.addEventListener('change', async (e) => {
@@ -209,9 +210,9 @@ function bind() {
   });
   act('ai-test', async (e) => {
     const btn = e.currentTarget;
-    const key = root.querySelector('#set-aiKey').value.trim();
+    const key = root.querySelector('#set-aiKey').value.trim() || BUILTIN_AI_KEY;
     if (!key) return aiStatus('Bitte zuerst einen Schlüssel eintragen.');
-    await saveSettings({ aiKey: key, aiModel: root.querySelector('#set-aiModel').value.trim() || DEFAULT_AI_MODEL });
+    await saveSettings({ aiKey: root.querySelector('#set-aiKey').value.trim(), aiModel: root.querySelector('#set-aiModel').value.trim() || DEFAULT_AI_MODEL });
     btn.disabled = true;
     aiStatus('Teste Verbindung …');
     try {

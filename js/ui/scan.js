@@ -5,6 +5,7 @@ import { PhotoAligner } from './align.js';
 import { warmup } from '../ocr.js';
 import { recognize } from '../recognize.js';
 import { warmupVision, warpCard } from '../vision.js';
+import { BUILTIN_AI_KEY } from '../ai-config.js';
 import { LANGS, langInfo } from '../lang.js';
 import { conditionInfo, conditionValue, conditionFactor } from '../pricing.js';
 import { findSet, guessImage } from '../api.js';
@@ -131,7 +132,7 @@ async function process(canvas, { fitToText = false } = {}) {
       scanLang: settings.scanLang,
       fallback: settings.fallbackLang,
       useVision: settings.vision,
-      ai: settings.aiKey ? { key: settings.aiKey, model: settings.aiModel, mode: settings.aiMode } : null,
+      ai: settings.aiKey || BUILTIN_AI_KEY ? { key: settings.aiKey || BUILTIN_AI_KEY, model: settings.aiModel, mode: settings.aiMode } : null,
       onStatus: (text, p) => text && setStatus(text, p != null && p < 1 && p > 0 ? `${Math.round(p * 100)} %` : ''),
     });
     window.__holoscanLast = result;

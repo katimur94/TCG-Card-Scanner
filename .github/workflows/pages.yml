@@ -61,6 +61,12 @@ jobs:
             node scripts/build-cardmarket.mjs || true
           fi
 
+      - name: KI-Schlüssel aus dem GitHub-Secret einsetzen
+        env:
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+        run: |
+          if [ -n "$OPENROUTER_KEY" ]; then sed -i "s|__OPENROUTER_KEY__|${OPENROUTER_KEY}|" js/ai-config.js; fi
+
       - name: Build-ID für Service-Worker-Updates setzen
         run: sed -i "s/__BUILD_ID__/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" sw.js
 

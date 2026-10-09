@@ -3,6 +3,8 @@
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 export const DEFAULT_AI_MODEL = 'google/gemma-4-31b-it:free';
+// Ausweichmodell, wenn das gewählte kostenlose Modell gerade überlastet ist (HTTP 429)
+const FALLBACK_AI_MODEL = 'google/gemma-4-26b-a4b-it:free';
 const LANGS = ['de', 'en', 'fr', 'es', 'it', 'pt', 'ja'];
 
 const PROMPT = `You are reading a photo of a single Pokémon trading card. Read the printed text exactly.
@@ -57,7 +59,17 @@ export class AiError extends Error {
  * Karte von der KI lesen lassen.
  * @returns {Promise<{name, number, setCode, language, hp, model, ms}>}
  */
-export async function readCardAI(view, { key, model = DEFAULT_AI_MODEL, timeout = 30000 } = {}) {
+export async function readCardAI(view, opts = {}) {
+  try {
+    return await readOnce(view, opts);
+  } catch (err) {
+    const model = opts.model || DEFAULT_AI_MODEL;
+    if (err.status !== 429 || model === FALLBACK_AI_MODEL) throw err;
+    return readOnce(view, { ...opts, model: FALLBACK_AI_MODEL });
+  }
+}
+
+async function readOnce(view, { key, model = DEFAULT_AI_MODEL, timeout = 30000 } = {}) {
   if (!key) throw new AiError('Kein API-Schlüssel', 401);
   const t0 = performance.now();
   const ctrl = new AbortController();

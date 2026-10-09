@@ -30,6 +30,7 @@ const SHELL = [
   'js/vision.js',
   'js/cardmarket.js',
   'js/ai.js',
+  'js/ai-config.js',
   'js/deal.js',
   'js/pricing.js',
   'js/camera.js',
