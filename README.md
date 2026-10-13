@@ -1,130 +1,77 @@
-# HoloScan – Pokémon Karten-Scanner
+# HoloScan – Karten-Scanner
 
-Karte vor die Handykamera halten und sofort den **Cardmarket-Preis** sehen. HoloScan ist eine installierbare Web-App (PWA): Sie läuft im Browser, lässt sich wie eine App auf den Home-Bildschirm legen und funktioniert nach dem ersten Laden auch offline.
+Sammelkarten in jeder Sprache erkennen, den **Cardmarket-Wert** sehen und die Sammlung wie ein Aktiendepot verfolgen. HoloScan ist eine installierbare Web-App (PWA): kein Konto, keine Anmeldung, alles bleibt auf dem Gerät, und nach dem ersten Laden funktioniert sie auch offline.
 
 **Live:** https://katimur94.github.io/TCG-Card-Scanner/
 
-## Funktionen
+> **Umbau in Arbeit:** HoloScan wird nach [`docs/SPEC.md`](docs/SPEC.md) neu gebaut, mit dem Design „Die Vitrine“. Der Stand steht in [`docs/PROGRESS.md`](docs/PROGRESS.md), Entscheidungen und Abweichungen in [`docs/FINDINGS.md`](docs/FINDINGS.md). Bestehende Sammlungen werden beim Update automatisch übernommen. Die alte Version liegt unter [`legacy/`](legacy/).
 
-- **Scannen per Kamera** mit Kartenrahmen, Taschenlampe und optionalem **Auto-Scan** (löst aus, sobald die Karte ruhig im Rahmen liegt)
-- **Bild- und Texterkennung kombiniert**: HoloScan findet die Kanten der Karte, rückt sie gerade und vergleicht sie mit rund 24.000 Kartenbildern (KI-Modell DINOv2, läuft im Browser). Die Texterkennung liest parallel Nummer, Set-Kürzel und Namen und unterscheidet so Nachdrucke mit gleichem Motiv. Dadurch werden Karten auch bei Spiegelungen, Hüllen, Holo-Glanz, schrägem Winkel oder unscharfem Foto erkannt
-- **Foto-Import** aus der Galerie: Foto mit zwei Fingern zoomen, verschieben und bei Bedarf drehen, bis die Karte im Rahmen liegt – gescannt wird genau der Rahmen; das Foto bleibt zum Nachjustieren stehen
-- **KI-Leser (optional)**: Ein Bild-Sprachmodell (Standard: Gemma 4 über [OpenRouter](https://openrouter.ai), kostenlos mit eigenem API-Schlüssel) liest bei unsicheren Scans Name, Nummer und Sprache der Karte. Schlüssel in „Mehr → KI-Leser“ eintragen; er bleibt nur auf dem Gerät, gesendet wird nur das Bild der gerade gerückten Karte
-- **Spracherkennung**: Deutsch, Englisch, Französisch, Spanisch, Italienisch, Portugiesisch und Japanisch, erkannt über
-  - den aufgedruckten Sprachcode (z. B. „PAL DE“ ab Karmesin & Purpur),
-  - Kartenbegriffe wie Schwäche/Weakness/Faiblesse, KP/HP/PV/PS,
-  - den gelesenen Kartennamen (z. B. „Enigmara“ → Deutsch),
-  - die Form der Textzeilen im Vergleich mit allen Sprachausgaben derselben Karte – funktioniert auch, wenn der Text zu unscharf zum Lesen ist.
-- **Cardmarket-Preise** aus dem offiziellen Preisguide: Preistrend, Ab-Preis, Ø Verkaufspreis, Ø 1/7/30 Tage und die Tendenz (7 gegenüber 30 Tagen)
-- **Varianten** mit eigenem Preis: Normal, Holo, Reverse Holo, Pokéball- und Meisterball-Muster, 1. Edition …
-- **Preis nach Zustand** für alle Cardmarket-Zustände (MT, NM, EX, GD, LP, PL, PO): Richtwert je Zustand (Preistrend = NM, übliche Abschläge, in „Mehr“ anpassbar) und je Zustand ein Direktlink zu den echten Cardmarket-Angeboten – gefiltert auf Kartensprache und Zustand, günstigstes zuerst
-- **Cardmarket-Links**: „Alle Angebote“ öffnet das Produkt direkt (ohne Filter, damit die Liste nie leer ist); zusätzlich gefiltert auf Kartensprache und Mindestzustand
-- **Preise auch ohne TCGdex-Preis**: Fehlt bei TCGdex der Cardmarket-Preis (u. a. ältere Promos, Shiny Vault, Gym, Trainer-Kits), holt HoloScan ihn aus Cardmarkets öffentlichem Preisguide – zugeordnet über Kartenname, Attacken und Erweiterung, täglich aktualisiert
-- **Japanische Karten** werden als eigene Cardmarket-Produkte mit eigenem Preis erkannt
-- **Kartenbild immer da**: Fehlt ein Bild in der Datenbank, nimmt HoloScan dein eigenes Scan-Foto („Dein Scan“) und speichert es mit in Sammlung und Verlauf; bei Suchtreffern ohne Bild springt das Bild einer anderen Ausgabe ein (z. B. „Bild: EN-Ausgabe“) oder ein Link zum Bild auf Cardmarket
-- **Kauf-Check**: Preis eingeben, zu dem du die Karte kaufen könntest (z. B. auf dem Flohmarkt) – HoloScan vergleicht mit dem Cardmarket-Wert im gewählten Zustand und sagt sofort, ob es ein Top-Deal, ein guter Kauf, ein fairer Preis oder zu teuer ist. Dazu: Ersparnis, möglicher Gewinn beim Weiterverkauf (nach 5 % Cardmarket-Provision und Verpackung), Verhandlungsziele und eine Investment-Einschätzung (Kursentwicklung, Set-Alter, Seltenheit, Wertniveau, Schwankung) mit Begründung. Beim Hinzufügen zur Sammlung wird der Preis als Einkaufspreis übernommen. Keine Anlageberatung.
-- **Serienscan**: Karten nacheinander scannen, der Gesamtwert des Stapels wird live summiert
-- **Sammlung** mit Gesamtwert, Wertentwicklung seit dem Hinzufügen, Einkaufspreis/Gewinn und Wertverlauf
-- **Merkliste mit Preisalarm** (wird beim Öffnen der App geprüft, optional mit Benachrichtigung)
-- **Suche** nach Name, Nummer oder Set-Kürzel (z. B. `Glurak`, `4/102`, `MEW 25`), auch offline
-- **Export** als CSV (Excel) oder JSON-Backup, Import auf anderen Geräten
-- Holo-Effekt mit 3D-Neigung, Haptik, Scan-Verlauf und eigener Preisverlauf je Karte
+## Funktionen (neue Version)
 
-## Auf dem Handy installieren
+- **Scanner als Startbildschirm** mit Sammlungswert und Tagesänderung. Der neue Kamera-Scanner folgt in M2/M3.
+- **Karte als Objekt:**
+  - 3D-Kippen per Finger oder Gyroskop, Holo-Glanz je Seltenheit
+  - Antippen dreht die Karte zum **Kurszettel**: Trendpreis, Kursverlauf, Ø 1/7/30 Tage, Tiefstpreis, dein Einstand, dein Gewinn
+- **Binder:**
+  - 3×3-Taschen zum Blättern
+  - Ränder glühen grün oder rot je nach Entwicklung seit dem Kauf
+  - Depot-Leiste mit Gesamtwert, Investiert und Gewinn
+- **Depot:** Wertverlauf, Top 5 und Flop 5, Karten ohne Preis separat gezählt
+- **Posten:** Kaufpreis, Herkunft (Kauf, Booster, Tausch, Geschenk), Zustand M–PO, Notiz, Rückgängig
+- **Merkliste** mit Preisalarm, **Kauf-Check** für Flohmarkt-Angebote
+- **Suche** nach Name, Set oder Nummer (`Glurak`, `4/102`, `MEW 25`), offline über den Kartenindex
+- **Export und Import** als JSON-Backup oder CSV, mit Backup-Erinnerung
 
-- **Android (Chrome):** Seite öffnen → „Mehr“ → „Installieren“ oder im Browser-Menü „App installieren“.
-- **iPhone (Safari):** Seite öffnen → Teilen-Symbol → „Zum Home-Bildschirm“.
+## Entwicklung
 
-## So funktioniert die Erkennung
-
-Alles läuft **direkt auf dem Gerät**; es werden keine Fotos hochgeladen.
-
-1. **Karte finden:** Im Kamerarahmen werden die vier Kartenkanten gesucht (Kantenbild, Liniensuche mit kleinen Winkeln) und die Karte perspektivisch gerade gerückt.
-2. **Bildsuche:** Ein Bildmodell ([DINOv2-small](https://github.com/facebookresearch/dinov2), int8, über [ONNX Runtime Web](https://onnxruntime.ai)) berechnet einen Merkmalsvektor. Eine gelernte Whitening-Projektion macht ihn robust gegen Spiegelungen, Unschärfe, Holo-Glanz, Farbstich und Toploader (trainiert mit simulierten Handyfotos). Steckt die Karte in einem Toploader, werden zusätzlich engere Ausschnitte geprüft. Verglichen wird mit dem Vektor-Index aller Kartenbilder (`data/vision/`, ca. 3 MB).
-3. **Texterkennung:** Parallel liest [Tesseract.js](https://github.com/naptha/tesseract.js) die gerade gerückte Karte: Namensleiste und – vergrößert – den unteren Rand mit Kartennummer (z. B. `025/165`) und Set-Kürzel. Ein Offline-Kartenindex (`data/`) ordnet Nummer, Gesamtzahl, Set-Kürzel und Namen zu; einzelne falsch gelesene Ziffern werden toleriert.
-4. **Zusammenführen:** Bild- und Texthinweise werden gewichtet kombiniert. Das Bild findet die Karte auch ohne lesbaren Text, der Text entscheidet zwischen Nachdrucken mit gleichem Motiv und zwischen japanischer und internationaler Ausgabe.
-5. **Sprache:** Neben Sprachcode, Kartenbegriffen und Namen vergleicht HoloScan die grobe Textstruktur des Fotos mit vorberechneten Signaturen derselben Karte in jeder Sprache (`data/vision/lang/`).
-6. Preise und Kartendetails kommen live von [TCGdex](https://tcgdex.dev), das den Cardmarket-Preisguide täglich übernimmt.
-
-Beim ersten Scan werden Bildmodell und Index einmalig geladen (ca. 30 MB) und danach offline aus dem Cache genutzt. In „Mehr“ lässt sich die Bilderkennung abschalten.
-
-Gemessen an je 160 simulierten Handyfotos (Spiegelungen, Hüllen, Holo-Glanz, Unschärfe, Schräglage; 3 Schwierigkeitsstufen): Die reine Texterkennung fand 34 % der Karten. Mit Bild- und Texterkennung sind es 99 % (Karte und Sprache richtig: 95 %); bei Karten im Toploader mit Fingern am Rand 96 % (Karte und Sprache: 87 %).
-
-Hinweis zu Zuständen: Cardmarket veröffentlicht nur den Preisguide (Trend, Ab-Preis, Durchschnitte) und keine Preise je Zustand; die einzelnen Angebote sind nicht frei abrufbar. Die Zustandspreise in HoloScan sind deshalb Richtwerte, die echten Angebote öffnet der Link der jeweiligen Zeile. Der Sammlungswert rechnet mit dem Zustand jeder Karte.
-
-Hinweis zur Sprache: Bei Cardmarket teilen sich die europäischen Sprachversionen einer Karte ein Produkt, der Preisguide gilt also sprachübergreifend. Deshalb öffnet HoloScan die Cardmarket-Seite gefiltert auf die erkannte Sprache. Japanische Karten sind eigene Produkte mit eigenem Preis.
-
-## GitHub Pages einrichten (einmalig)
-
-Der Workflow `.github/workflows/pages.yml` veröffentlicht die App bei jedem Push auf den Standard-Branch. Einmalig muss GitHub Pages aktiviert werden:
-
-1. Repository → **Settings → Pages**
-2. Unter **Build and deployment → Source** die Option **GitHub Actions** wählen
-3. Unter **Actions** den Workflow „GitHub Pages“ erneut starten („Re-run all jobs“ oder „Run workflow“)
-
-Montags aktualisiert derselbe Workflow automatisch den Kartenindex und ergänzt den Bildindex um neue Karten, damit neue Sets erkannt werden.
-
-## Lokal starten
-
-Die App ist rein statisch und braucht keinen Build-Schritt. Die Kamera funktioniert nur über `https://` oder `localhost`.
+Node.js 22. Die Kamera funktioniert nur über `https://` oder `localhost`.
 
 ```bash
-npx http-server -p 8080 -c-1 .
-# oder
-python3 -m http.server 8080
+npm install
+npm run dev          # Entwicklungsserver
+npm run build        # Produktions-Build nach dist/
+npm test             # Unit-Tests (Vitest)
+npm run e2e          # Browser-Tests (Playwright), braucht vorher npm run build
+npm run lint && npm run typecheck
 ```
 
-Dann `http://localhost:8080` öffnen.
-
-Kartenindex neu erzeugen (Node.js 22 oder neuer):
+Datenskripte (laufen auch automatisch im Workflow):
 
 ```bash
-node scripts/build-index.mjs
-```
-
-Bildindex und Sprach-Signaturen ergänzen (Python 3; berechnet nur fehlende Karten):
-
-```bash
-pip install onnxruntime opencv-python-headless numpy
-python3 scripts/build-vision-index.py
+node scripts/build-index.mjs           # Kartenindex aus TCGdex (public/data/)
+node scripts/build-cardmarket.mjs      # Ersatzpreise aus Cardmarkets Preis-Guide
+node scripts/build-price-history.mjs   # tägliche Preis-Historie
+python3 scripts/build-vision-index.py  # Bildindex (pip install onnxruntime opencv-python-headless numpy)
 ```
 
 ## Aufbau
 
 ```
-index.html, css/app.css      Oberfläche und Design
-manifest.webmanifest, sw.js  PWA: Installation, Offline-Cache, Updates
-js/app.js                    Start, Navigation
-js/camera.js                 Kamera, Ausschnitt, Auto-Auslöser
-js/ocr.js                    Texterkennung (Tesseract.js)
-js/parse.js                  Nummer, Set-Kürzel, Sprachcode, Name aus dem OCR-Text
-js/lang.js                   Sprachen, Cardmarket-IDs, Spracherkennung
-js/identify.js               Zuordnung zum Kartenindex, unscharfe Suche
-js/vision.js                 Kartenkanten, Entzerrung, Bildsuche, Sprache am Bild
-js/ai.js                     KI-Leser (Bild-Sprachmodell über OpenRouter, optional)
-js/recognize.js              Gesamte Erkennungs-Pipeline
-js/api.js                    TCGdex-Client und Index-Laden
-js/pricing.js                Varianten, Preisfelder, Zustands-Richtwerte, Cardmarket-Links
-js/deal.js                   Kauf-Check und Investment-Einschätzung
-js/store.js, js/db.js        Sammlung, Verlauf, Einstellungen (IndexedDB)
-js/ui/*                      Ansichten (Scanner, Ergebnis, Sammlung, Suche, Mehr)
-data/                        Offline-Kartenindex (generiert)
-data/vision/                 Bildindex (int8-Vektoren) und Sprach-Signaturen (generiert)
-models/card-embed.onnx       Bildmodell: DINOv2-small (int8) + gelerntes Whitening
-scripts/build-index.mjs      Erzeugt den Kartenindex aus TCGdex
-scripts/build-vision-index.py  Erzeugt Bildindex und Sprach-Signaturen
-scripts/build-cardmarket.mjs   Ersatzpreise aus Cardmarkets Preisguide (data/cm/, täglich im Workflow)
-js/cardmarket.js             Zuordnung Karte -> Cardmarket-Produkt für die Ersatzpreise
-vendor/tesseract/            Tesseract.js (Apache-2.0)
+src/db/          Datenbank (Dexie) und Übernahme der Daten aus der alten Version
+src/lib/         Kartenindex, TCGdex, Preise, Sprachen, Kauf-Check (aus der alten Version übertragen)
+src/domain/      Sammlung, Bewertung/Depot, Binder, Backup, Preis-Historie
+src/state/       Einstellungen und Navigation (Zustand)
+src/ui/          Scanner, Binder, Karte, Blätter, Karten-Komponente
+src/sw.ts        Service Worker (ersetzt den alten unter sw.js)
+public/data/     Offline-Kartenindex, Bildindex, Ersatzpreise (generiert)
+public/models/   Bildmodell (DINOv2-small, int8)
+scripts/         Datenskripte
+e2e/             Browser-Tests inkl. Update-Test alte -> neue Version
+legacy/          alte Version (nicht veröffentlicht)
 ```
+
+## Veröffentlichung
+
+Der Workflow `.github/workflows/pages.yml` prüft jeden Push und veröffentlicht den Standard-Branch auf GitHub Pages. Täglich schreibt er Ersatzpreise und Preis-Historie fort, montags auch Kartenindex und Bildindex. Die erzeugten Daten liegen im Branch `data`.
+
+Einmalig einrichten: Repository → **Settings → Pages → Source: GitHub Actions**.
 
 ## Datenquellen und Lizenzen
 
-- Kartendaten, Bilder und Preise: [TCGdex](https://tcgdex.dev) (Cardmarket-Preisguide, TCGplayer)
-- Ersatzpreise: öffentlicher [Cardmarket](https://www.cardmarket.com)-Preisguide und Produktkatalog
-- Texterkennung: [Tesseract.js](https://github.com/naptha/tesseract.js), Apache-2.0 (`vendor/tesseract/LICENSE.md`)
-- Bildmodell: [DINOv2](https://github.com/facebookresearch/dinov2) von Meta AI, Apache-2.0 (ONNX-Fassung von [onnx-community/dinov2-small](https://huggingface.co/onnx-community/dinov2-small), ergänzt um eine eigene Whitening-Projektion)
-- Laufzeit: [ONNX Runtime Web](https://github.com/microsoft/onnxruntime), MIT (über jsDelivr)
-- Schrift: [Outfit](https://fonts.google.com/specimen/Outfit), SIL Open Font License
+- Kartendaten, Bilder und Preise: [TCGdex](https://tcgdex.dev) (Cardmarket-Preis-Guide, TCGplayer)
+- Preis-Guide und Produktkatalog: öffentliche Dateien von [Cardmarket](https://www.cardmarket.com)
+- Texterkennung: [Tesseract.js](https://github.com/naptha/tesseract.js), Apache-2.0
+- Bildmodell: [DINOv2](https://github.com/facebookresearch/dinov2), Apache-2.0
+- Schriften: Unbounded, Figtree, JetBrains Mono (SIL Open Font License, selbst gehostet)
 
-HoloScan ist ein inoffizielles Fanprojekt. Pokémon und alle zugehörigen Namen sind Marken von Nintendo, Creatures Inc., GAME FREAK und The Pokémon Company. Das Projekt ist nicht mit Cardmarket oder TCGdex verbunden. Alle Preise ohne Gewähr.
+HoloScan ist ein inoffizielles Fanprojekt und nicht verbunden mit The Pokémon Company, Nintendo, Creatures, GAME FREAK, Cardmarket oder TCGdex. Alle Preise ohne Gewähr, keine Anlageberatung.

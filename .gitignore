@@ -5,4 +5,9 @@ _site/
 .eslintcache
 .cache/
 __pycache__/
-data/cm/p/
+public/data/cm/p/
+dist/
+dev-dist/
+test-results/
+playwright-report/
+public/data/prices/

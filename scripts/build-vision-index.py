@@ -33,9 +33,9 @@ import numpy as np
 import onnxruntime as ort
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-DATA = os.path.join(ROOT, 'data')
+DATA = os.path.join(ROOT, 'public', 'data')
 OUT = os.path.join(DATA, 'vision')
-MODEL = os.path.join(ROOT, 'models', 'card-embed.onnx')
+MODEL = os.path.join(ROOT, 'public', 'models', 'card-embed.onnx')
 ASSETS = 'https://assets.tcgdex.net'
 INTL_LANGS = ['en', 'de', 'fr', 'es', 'it', 'pt']
 IN_W, IN_H = 182, 252  # Eingangsgröße des Modells (Vielfaches der Patchgröße 14, Kartenformat)
