@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Erzeugt den Offline-Kartenindex in data/ aus der TCGdex-API.
+// Erzeugt den Offline-Kartenindex in public/data/ aus der TCGdex-API.
 //
 //   node scripts/build-index.mjs
 //
-// data/sets.json        – alle Sets (international + japanisch) mit Kartenanzahl,
+// public/data/sets.json        – alle Sets (international + japanisch) mit Kartenanzahl,
 //                         offiziellem Kürzel (z. B. "MEW"), Erscheinungsdatum, Serie
-// data/cards-<lang>.json – Kartennamen pro Sprache, gruppiert nach Set
+// public/data/cards-<lang>.json – Kartennamen pro Sprache, gruppiert nach Set
 //
 // Die App nutzt den Index, um OCR-Ergebnisse (Nummer, Set-Kürzel, Name) ohne
 // Netzwerk auf Kandidaten abzubilden. Preise werden immer live geladen.
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const API = 'https://api.tcgdex.net/v2';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'data');
+const OUT = join(ROOT, 'public', 'data');
 
 // Sprachen mit gemeinsamen (internationalen) Set-IDs
 const INTL_LANGS = ['en', 'de', 'fr', 'es', 'it', 'pt'];
@@ -57,10 +57,7 @@ async function pool(items, size, fn) {
 }
 
 async function buildSets() {
-  const groups = [
-    { group: 'intl', lang: 'en' },
-    ...ASIA_LANGS.map((lang) => ({ group: lang, lang })),
-  ];
+  const groups = [{ group: 'intl', lang: 'en' }, ...ASIA_LANGS.map((lang) => ({ group: lang, lang }))];
   const sets = [];
   for (const { group, lang } of groups) {
     const list = await getJSON(`/${lang}/sets`);

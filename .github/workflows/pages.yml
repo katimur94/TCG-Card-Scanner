@@ -1,9 +1,9 @@
 name: GitHub Pages
 
-# Veröffentlicht HoloScan bei jedem Push auf den Standard-Branch.
-# Täglich werden die Cardmarket-Ersatzpreise (für Karten ohne Preis bei TCGdex) erneuert.
-# Montags wird zusätzlich der Kartenindex (neue Sets) aus TCGdex aktualisiert
-# und der Bildindex der Bilderkennung um neue Karten ergänzt.
+# Bei jedem Push: prüfen (Lint, Typen, Unit- und Browser-Tests) und bauen; auf dem Standard-Branch auch veröffentlichen.
+# Täglich: Cardmarket-Ersatzpreise und Preis-Historie erneuern. Montags zusätzlich Kartenindex (neue Sets)
+# und Bildindex. Erzeugte Daten liegen im Branch "data" (ein einzelner Commit, der ersetzt wird), damit sie
+# zwischen den Läufen erhalten bleiben und das Haupt-Repository nicht mit jedem Tag wächst.
 
 on:
   push:
@@ -14,76 +14,130 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build:
-    if: github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+  data:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      WEEKLY: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1' }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Gespeicherte Daten aus dem Branch "data" holen
+        run: |
+          if git ls-remote --exit-code --heads origin data >/dev/null; then
+            git fetch --depth 1 origin data
+            git archive FETCH_HEAD | tar -x -C public/data
+          fi
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
 
       - name: Kartenindex aktualisieren
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1'
+        if: env.WEEKLY == 'true'
         timeout-minutes: 20
-        # Schlägt der Abruf fehl, wird der eingecheckte Index verwendet.
-        run: node scripts/build-index.mjs || git checkout -- data
+        # Schlägt der Abruf fehl, bleibt der bisherige Index.
+        run: node scripts/build-index.mjs || echo "::warning::Kartenindex nicht aktualisiert"
 
       - uses: actions/setup-python@v7
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1'
+        if: env.WEEKLY == 'true'
         with:
           python-version: '3.12'
 
       - name: Bildindex für neue Karten ergänzen
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 4 * * 1'
+        if: env.WEEKLY == 'true'
         timeout-minutes: 40
-        # Berechnet nur Karten, die im eingecheckten Bildindex noch fehlen.
+        # Berechnet nur Karten, die im gespeicherten Bildindex noch fehlen.
         run: |
           pip install --quiet onnxruntime opencv-python-headless numpy
-          python3 scripts/build-vision-index.py || git checkout -- data/vision
+          cp -r public/data/vision /tmp/vision-backup
+          python3 scripts/build-vision-index.py || { echo "::warning::Bildindex nicht ergänzt"; rm -rf public/data/vision; cp -r /tmp/vision-backup public/data/vision; }
 
-      - name: Cardmarket-Preisguide laden
+      - name: Cardmarket-Ersatzpreise
         timeout-minutes: 30
-        # Set-Zuordnung nur wöchentlich neu ermitteln; schlägt der Abruf fehl, fehlen nur die Ersatzpreise.
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event.schedule }}" = "17 4 * * 1" ]; then
-            node scripts/build-cardmarket.mjs --expansions || { git checkout -- data/cm; node scripts/build-cardmarket.mjs || true; }
+          if [ "$WEEKLY" = "true" ]; then
+            node scripts/build-cardmarket.mjs --expansions || node scripts/build-cardmarket.mjs || echo "::warning::Ersatzpreise nicht aktualisiert"
           else
-            node scripts/build-cardmarket.mjs || true
+            node scripts/build-cardmarket.mjs || echo "::warning::Ersatzpreise nicht aktualisiert"
           fi
 
-      - name: KI-Schlüssel aus dem GitHub-Secret einsetzen
+      - name: Preis-Historie fortschreiben
+        timeout-minutes: 15
+        run: node scripts/build-price-history.mjs || echo "::warning::Preis-Historie nicht fortgeschrieben"
+
+      - name: Daten im Branch "data" speichern (nur bei Änderungen)
         env:
-          OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+          TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$OPENROUTER_KEY" ]; then sed -i "s|__OPENROUTER_KEY__|${OPENROUTER_KEY}|" js/ai-config.js; fi
+          set -e
+          url="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          rm -rf /tmp/data && mkdir /tmp/data && cp -r public/data/. /tmp/data/
+          cd /tmp/data
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Daten vom $(date -u +%F)"
+          if git fetch -q --depth 1 "$url" data 2>/dev/null && git diff --quiet FETCH_HEAD HEAD; then
+            echo "Keine Änderungen."
+          else
+            git push -q --force "$url" HEAD:data
+          fi
 
-      - name: Build-ID für Service-Worker-Updates setzen
-        run: sed -i "s/__BUILD_ID__/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" sw.js
+  build:
+    needs: data
+    if: always() && (needs.data.result == 'success' || needs.data.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
-      - name: Seite zusammenstellen
+      - name: Gespeicherte Daten aus dem Branch "data" holen
         run: |
-          mkdir -p _site
-          cp -r index.html manifest.webmanifest sw.js css js data models assets vendor _site/
+          if git ls-remote --exit-code --heads origin data >/dev/null; then
+            git fetch --depth 1 origin data
+            git archive FETCH_HEAD | tar -x -C public/data
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Browser-Tests (Update von der alten Version, Kernabläufe)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
 
       - uses: actions/configure-pages@v6
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
 
       - uses: actions/upload-pages-artifact@v5
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         with:
-          path: _site
+          path: dist
 
   deploy:
     needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

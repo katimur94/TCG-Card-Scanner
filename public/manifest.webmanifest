@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "HoloScan – Pokémon Karten-Scanner",
+  "name": "HoloScan – Karten-Scanner",
   "short_name": "HoloScan",
-  "description": "Pokémon-Karten scannen und sofort den Cardmarket-Preis sehen – mit Spracherkennung, Sammlung, Serienscan und Offline-Modus.",
+  "description": "Sammelkarten in jeder Sprache scannen, den Cardmarket-Wert sehen und die Sammlung wie ein Depot verfolgen.",
   "lang": "de",
   "dir": "ltr",
   "start_url": "./?source=pwa",
@@ -13,8 +13,8 @@
     "minimal-ui"
   ],
   "orientation": "portrait",
-  "background_color": "#07060d",
-  "theme_color": "#07060d",
+  "background_color": "#0b0b10",
+  "theme_color": "#0b0b10",
   "categories": [
     "utilities",
     "shopping",
@@ -54,19 +54,8 @@
   ],
   "shortcuts": [
     {
-      "name": "Karte scannen",
-      "short_name": "Scannen",
-      "url": "./?view=scan",
-      "icons": [
-        {
-          "src": "assets/icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    },
-    {
-      "name": "Meine Sammlung",
-      "short_name": "Sammlung",
+      "name": "Mein Binder",
+      "short_name": "Binder",
       "url": "./?view=collection",
       "icons": [
         {

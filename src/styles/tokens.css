@@ -1,0 +1,65 @@
+/* Design-Tokens „Die Vitrine“: dunkel wie Samt, die Karten sind das einzig Bunte. */
+
+@import '@fontsource/unbounded/latin-500.css';
+@import '@fontsource/unbounded/latin-ext-500.css';
+@import '@fontsource/unbounded/latin-700.css';
+@import '@fontsource/unbounded/latin-ext-700.css';
+@import '@fontsource/figtree/latin-400.css';
+@import '@fontsource/figtree/latin-ext-400.css';
+@import '@fontsource/figtree/latin-500.css';
+@import '@fontsource/figtree/latin-ext-500.css';
+@import '@fontsource/figtree/latin-600.css';
+@import '@fontsource/figtree/latin-ext-600.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-ext-500.css';
+@import '@fontsource/jetbrains-mono/latin-700.css';
+@import '@fontsource/jetbrains-mono/latin-ext-700.css';
+
+:root {
+  color-scheme: dark;
+
+  /* Flächen */
+  --velvet: #0b0b10;
+  --velvet-2: #121219;
+  --velvet-3: #1a1a24;
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass-strong: rgba(255, 255, 255, 0.1);
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --text: #f2f1f7;
+  --text-2: #b4b2c3;
+  --text-3: #7d7b8f;
+
+  /* Gewinn / Verlust (immer zusätzlich ▲/▼) */
+  --gain: #3ddc97;
+  --loss: #ff5c7a;
+  --warn: #f5c451;
+
+  /* Akzent: gedämpfter Holo-Verlauf, nur für die wichtigste Aktion und den Scan-Rahmen */
+  --holo: conic-gradient(from 210deg, #f3c97a, #e994c8, #a7a2f5, #7fe0cf, #f3c97a);
+  --holo-linear: linear-gradient(110deg, #f3c97a, #e994c8 35%, #a7a2f5 65%, #7fe0cf);
+
+  /* Schrift */
+  --font-head: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-num: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Maße */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 22px;
+  --card-ratio: 63 / 88;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --shadow-card: 0 18px 40px -12px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
