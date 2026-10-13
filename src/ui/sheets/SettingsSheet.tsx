@@ -7,6 +7,7 @@ import { useSettings } from '../../state/settings';
 import { LANGS } from '../../lib/lang';
 import { CONDITIONS } from '../../lib/pricing';
 import { download, date } from '../../lib/util';
+import { DISPOSALS_KEY } from '../../domain/collection';
 import { applyImport, exportBackup, exportCsv, planImport, type ImportPlan } from '../../domain/backup';
 import { db } from '../../db/schema';
 import { migrateFromLegacy, MIGRATION_KEY, PORTFOLIO_KEY, type MigrationReport } from '../../db/migrate';
@@ -100,7 +101,7 @@ export function SettingsSheet() {
       },
     );
     // Der Übernahme-Merker bleibt bestehen, sonst kämen die Daten der alten Version beim nächsten Start zurück.
-    await db.settings.delete(PORTFOLIO_KEY);
+    await db.settings.bulkDelete([PORTFOLIO_KEY, DISPOSALS_KEY]);
     toast({ text: 'Alles gelöscht' });
   };
 

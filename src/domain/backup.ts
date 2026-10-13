@@ -5,6 +5,7 @@
 import { db, type CollectionItem, type Photo } from '../db/schema';
 import { itemFromLegacy, dataUrlToBlob } from '../db/migrate';
 import { unitValueCents } from './valuation';
+import { DISPOSALS_KEY, disposals, type Disposal } from './collection';
 import { langInfo } from '../lib/lang';
 import { conditionInfo } from '../lib/pricing';
 
@@ -18,6 +19,7 @@ export interface BackupFile {
   items: CollectionItem[];
   photos?: Array<{ id: string; dataUrl: string }>;
   priceHistory?: Array<{ key: string; points: Array<{ d: string; c: number }> }>;
+  disposals?: Disposal[]; // verkauft / verloren
 }
 
 async function blobToDataUrl(b: Blob): Promise<string> {
@@ -28,10 +30,11 @@ async function blobToDataUrl(b: Blob): Promise<string> {
 }
 
 export async function exportBackup(): Promise<BackupFile> {
-  const [items, photos, prices] = await Promise.all([
+  const [items, photos, prices, gone] = await Promise.all([
     db.collection_items.toArray(),
     db.photos.toArray(),
     db.price_points.toArray(),
+    disposals(),
   ]);
   const used = new Set(items.map((i) => i.photoId).filter(Boolean));
   return {
@@ -43,6 +46,7 @@ export async function exportBackup(): Promise<BackupFile> {
       photos.filter((p) => used.has(p.id)).map(async (p) => ({ id: p.id, dataUrl: await blobToDataUrl(p.blob) })),
     ),
     priceHistory: prices,
+    disposals: gone,
   };
 }
 
@@ -121,10 +125,53 @@ export function validItem(o: unknown): CollectionItem | null {
   };
 }
 
+/** Eintrag aus dem Abgangsbuch prüfen. Unbekannte Felder werden verworfen. */
+export function validDisposal(o: unknown): Disposal | null {
+  if (!o || typeof o !== 'object') return null;
+  const r = o as Record<string, unknown>;
+  const ok =
+    isStr(r.id) &&
+    r.id.length > 0 &&
+    isNum(r.at) &&
+    (r.reason === 'sold' || r.reason === 'lost') &&
+    isStr(r.cardId) &&
+    isStr(r.name) &&
+    (r.region === 'intl' || r.region === 'ja') &&
+    isNum(r.qty) &&
+    Number.isInteger(r.qty) &&
+    r.qty >= 1 &&
+    nullable(r.soldCents, isCents) &&
+    nullable(r.paidCents, isCents) &&
+    nullable(r.valueCents, isCents);
+  if (!ok) return null;
+  const str = (v: unknown, n = 200) => (isStr(v) ? v.slice(0, n) : '');
+  const numN = (v: unknown) => (isNum(v) ? v : null);
+  return {
+    id: r.id as string,
+    at: r.at as number,
+    reason: r.reason as Disposal['reason'],
+    itemId: str(r.itemId),
+    cardId: r.cardId as string,
+    setId: str(r.setId),
+    localId: str(r.localId),
+    region: r.region as Disposal['region'],
+    lang: str(r.lang, 10),
+    name: str(r.name),
+    setName: str(r.setName),
+    variantLabel: str(r.variantLabel, 100),
+    condition: isNum(r.condition) && r.condition >= 1 && r.condition <= 7 ? r.condition : 2,
+    qty: r.qty as number,
+    soldCents: r.reason === 'sold' ? numN(r.soldCents) : null,
+    paidCents: numN(r.paidCents),
+    valueCents: numN(r.valueCents),
+  };
+}
+
 export interface ImportPlan {
   items: CollectionItem[];
   photos: Photo[];
   prices: Array<{ key: string; points: Array<{ d: string; c: number }> }>;
+  disposals: Disposal[];
   skipped: number;
   legacy: boolean;
 }
@@ -140,7 +187,7 @@ export function planImport(text: string): ImportPlan {
   const d = data as Partial<BackupFile> & { items?: unknown };
   if (!d || typeof d !== 'object' || !Array.isArray(d.items)) throw new Error('Kein HoloScan-Backup gefunden.');
   const legacy = d.v === 1 || d.v == null;
-  const plan: ImportPlan = { items: [], photos: [], prices: [], skipped: 0, legacy };
+  const plan: ImportPlan = { items: [], photos: [], prices: [], disposals: [], skipped: 0, legacy };
   for (const raw of d.items) {
     if (legacy) {
       const r = raw && typeof raw === 'object' ? itemFromLegacy(raw as unknown as Record<string, unknown>) : null;
@@ -169,6 +216,10 @@ export function planImport(text: string): ImportPlan {
       const points = h.points.filter((x) => x && isStr(x.d) && isCents(x.c)).slice(-365);
       if (points.length) plan.prices.push({ key: h.key, points });
     }
+    for (const raw of Array.isArray(d.disposals) ? d.disposals : []) {
+      const g = validDisposal(raw);
+      if (g) plan.disposals.push(g);
+    }
     // Fotos, die fehlen, nicht verlinkt lassen
     const have = new Set(plan.photos.map((p) => p.id));
     for (const i of plan.items) if (i.photoId && !have.has(i.photoId)) i.photoId = null;
@@ -181,7 +232,7 @@ export async function applyImport(plan: ImportPlan, mode: 'merge' | 'replace') {
   if (mode === 'replace' && plan.items.length === 0)
     throw new Error('Das Backup enthält keine gültigen Karten – die Sammlung bleibt unverändert.');
   let added = 0;
-  await db.transaction('rw', [db.collection_items, db.photos, db.price_points], async () => {
+  await db.transaction('rw', [db.collection_items, db.photos, db.price_points, db.settings], async () => {
     if (mode === 'replace') await db.collection_items.clear();
     const existing = await db.collection_items.bulkGet(plan.items.map((i) => i.id));
     const fresh = plan.items.filter((_, i) => !existing[i]);
@@ -189,6 +240,13 @@ export async function applyImport(plan: ImportPlan, mode: 'merge' | 'replace') {
     added = fresh.length;
     await db.photos.bulkPut(plan.photos);
     for (const p of plan.prices) if (!(await db.price_points.get(p.key))) await db.price_points.add(p);
+    if (plan.disposals.length) {
+      // Abgangsbuch zusammenführen (gleiche ID nur einmal), nie leeren
+      const have = await disposals();
+      const ids = new Set(have.map((g) => g.id));
+      const merged = [...have, ...plan.disposals.filter((g) => !ids.has(g.id))].sort((a, b) => a.at - b.at);
+      await db.settings.put({ key: DISPOSALS_KEY, value: merged });
+    }
   });
   return { added, skipped: plan.skipped + (plan.items.length - added) };
 }

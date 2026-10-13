@@ -86,6 +86,57 @@ test('Einstellungen: Backup exportieren und wieder importieren', async ({ page }
 test.describe('Kleines Handy', () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
+  test('Karte als verkauft austragen, im Depot vermerkt, Rückgängig holt sie zurück', async ({ page }) => {
+    const snap = (n: string) =>
+      process.env.SHOT_DIR && page.screenshot({ path: join(process.env.SHOT_DIR, `${n}.png`), scale: 'css' });
+    await page.goto('./?view=search');
+    await page.getByRole('searchbox', { name: /Name, Set oder Nummer/ }).fill('Glurak');
+    await page.locator('.result', { hasText: 'Glurak' }).first().click();
+    await page.getByRole('button', { name: 'In die Sammlung' }).click();
+    await page.getByLabel('Preis pro Karte').fill('100');
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+    await expect(page.locator('.post')).toHaveCount(1);
+    await page.locator('.post').scrollIntoViewIfNeeded();
+    await expect(page.getByText(/Antippen zum Bearbeiten, Verkaufen/)).toBeVisible();
+
+    await page.locator('.post').click();
+    const sheet = page.getByRole('dialog', { name: 'Posten bearbeiten' });
+    await expect(sheet.getByRole('button', { name: 'Verkauft' })).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Verloren' })).toBeVisible();
+    await page.waitForTimeout(500);
+    await expectNoOverflow(page, '.sheet');
+    await snap('a-posten');
+    await sheet.getByRole('button', { name: 'Verkauft' }).click();
+
+    const sold = page.getByRole('dialog', { name: 'Verkauft' });
+    await sold.getByLabel(/Verkauft für/).fill('120,50');
+    await expect(sold).toContainText('Gewinn +20,50');
+    await expectNoOverflow(page, '.sheet');
+    await snap('b-verkauft');
+    await sold.getByRole('button', { name: 'Aus der Sammlung nehmen' }).click();
+    await expect(page.getByText(/als verkauft vermerkt/)).toBeVisible();
+    await expect(page.locator('.post')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Rückgängig' }).click();
+    await expect(page.locator('.post')).toHaveCount(1);
+    await page.locator('.post').click();
+    await page.getByRole('button', { name: 'Verloren' }).click();
+    await page
+      .getByRole('dialog', { name: 'Verloren' })
+      .getByRole('button', { name: 'Aus der Sammlung nehmen' })
+      .click();
+    await expect(page.locator('.post')).toHaveCount(0);
+
+    await page.goto('./?view=collection');
+    await page.getByRole('button', { name: 'Depot öffnen' }).click();
+    const depot = page.getByRole('dialog', { name: 'Depot' });
+    await expect(depot.getByRole('region', { name: /Verkauft & verloren/ })).toContainText('verloren');
+    await depot.getByRole('region', { name: /Verkauft & verloren/ }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await expectNoOverflow(page, '.sheet');
+    await snap('c-depot');
+  });
+
   test('Detailansicht nutzt die volle Breite, Binder scrollt bis zur letzten Tasche', async ({ page }) => {
     await page.goto('./?view=search');
     await page.getByRole('searchbox', { name: /Name, Set oder Nummer/ }).fill('Glurak');

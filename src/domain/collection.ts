@@ -3,7 +3,7 @@
 import { db, type CollectionItem, type ListKind, type Origin } from '../db/schema';
 import { PORTFOLIO_KEY } from '../db/migrate';
 import { loadCardData, type CardData } from './cardData';
-import { depotOf } from './valuation';
+import { depotOf, unitValueCents } from './valuation';
 import { uid, today, toCents } from '../lib/util';
 
 export interface NewPost {
@@ -187,4 +187,106 @@ export async function refreshPrices({
   const depot = depotOf(all);
   if (depot.cards) await recordPortfolio(depot.valueCents, depot.cards);
   return result;
+}
+
+// ---------- Verkauft / verloren ----------
+
+export const DISPOSALS_KEY = 'disposals';
+export type DisposalReason = 'sold' | 'lost';
+
+/** Eintrag im Abgangsbuch: welche Karte(n) die Sammlung verlassen haben und warum. Beträge pro Stück. */
+export interface Disposal {
+  id: string;
+  at: number;
+  reason: DisposalReason;
+  itemId: string;
+  cardId: string;
+  setId: string;
+  localId: string;
+  region: CollectionItem['region'];
+  lang: string;
+  name: string;
+  setName: string;
+  variantLabel: string;
+  condition: number;
+  qty: number;
+  soldCents: number | null; // Verkaufspreis pro Stück (nur bei „verkauft“, optional)
+  paidCents: number | null; // Kaufpreis pro Stück zum Zeitpunkt des Abgangs
+  valueCents: number | null; // Marktwert pro Stück zum Zeitpunkt des Abgangs
+}
+
+export async function disposals(): Promise<Disposal[]> {
+  return ((await db.settings.get(DISPOSALS_KEY))?.value as Disposal[]) || [];
+}
+
+/**
+ * Karten als verkauft oder verloren aus der Sammlung nehmen: Menge verringern (bei allen: Posten löschen)
+ * und im Abgangsbuch vermerken. Liefert eine Funktion zum Rückgängigmachen.
+ */
+export async function disposePost(
+  id: string,
+  { reason, qty, soldCents = null }: { reason: DisposalReason; qty: number; soldCents?: number | null },
+  now = Date.now(),
+): Promise<() => Promise<void>> {
+  let before: CollectionItem | undefined;
+  let entryId = '';
+  await db.transaction('rw', db.collection_items, db.settings, async () => {
+    const item = await db.collection_items.get(id);
+    if (!item) throw new Error('Posten nicht gefunden.');
+    before = item;
+    const n = Math.min(item.qty, Math.max(1, Math.round(qty)));
+    if (n >= item.qty) await db.collection_items.delete(id);
+    else await db.collection_items.update(id, { qty: item.qty - n, updatedAt: now });
+    const entry: Disposal = {
+      id: uid(),
+      at: now,
+      reason,
+      itemId: item.id,
+      cardId: item.cardId,
+      setId: item.setId,
+      localId: item.localId,
+      region: item.region,
+      lang: item.lang,
+      name: item.name,
+      setName: item.setName,
+      variantLabel: item.variantLabel,
+      condition: item.condition,
+      qty: n,
+      soldCents: reason === 'sold' ? soldCents : null,
+      paidCents: item.pricePaidCents,
+      valueCents: unitValueCents(item),
+    };
+    entryId = entry.id;
+    await db.settings.put({ key: DISPOSALS_KEY, value: [...(await disposals()), entry] });
+  });
+  return async () => {
+    await db.transaction('rw', db.collection_items, db.settings, async () => {
+      if (before) await db.collection_items.put(before);
+      await db.settings.put({ key: DISPOSALS_KEY, value: (await disposals()).filter((d) => d.id !== entryId) });
+    });
+  };
+}
+
+export interface DisposalSummary {
+  sold: number; // Karten
+  lost: number; // Karten
+  revenueCents: number; // Erlös aller Verkäufe mit Preis
+  realizedCents: number | null; // Erlös − Kaufpreis, nur Verkäufe mit beiden Angaben
+  lostValueCents: number; // Marktwert der verlorenen Karten (soweit bekannt)
+}
+
+export function summarizeDisposals(list: Disposal[]): DisposalSummary {
+  const s: DisposalSummary = { sold: 0, lost: 0, revenueCents: 0, realizedCents: null, lostValueCents: 0 };
+  for (const d of list) {
+    if (d.reason === 'lost') {
+      s.lost += d.qty;
+      s.lostValueCents += (d.valueCents ?? 0) * d.qty;
+      continue;
+    }
+    s.sold += d.qty;
+    if (d.soldCents == null) continue;
+    s.revenueCents += d.soldCents * d.qty;
+    if (d.paidCents != null) s.realizedCents = (s.realizedCents ?? 0) + (d.soldCents - d.paidCents) * d.qty;
+  }
+  return s;
 }
