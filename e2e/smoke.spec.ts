@@ -71,7 +71,7 @@ test('Rückgängig nach dem Hinzufügen entfernt den Posten wieder', async ({ pa
 
 test('Einstellungen: Backup exportieren und wieder importieren', async ({ page }) => {
   await page.goto('./?view=collection');
-  await page.getByRole('button', { name: 'Einstellungen' }).click();
+  await page.getByRole('region', { name: 'Binder' }).getByRole('button', { name: 'Einstellungen' }).click();
   await expect(page.getByRole('dialog', { name: 'Einstellungen' })).toBeVisible();
   await page.waitForTimeout(500);
   await expectNoOverflow(page, '.sheet');
