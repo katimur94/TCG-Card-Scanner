@@ -37,7 +37,7 @@ export function Stack({ onOpen }: { onOpen: () => void }) {
       ? working.label
       : 'Stapel leer';
   return (
-    <button className="stack" onClick={onOpen} disabled={!entries.length} aria-label={label}>
+    <button className="pile" onClick={onOpen} disabled={!entries.length} aria-label={label}>
       <div className="stack-fan">
         <AnimatePresence>
           {top.map((e, i) => (

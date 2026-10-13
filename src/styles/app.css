@@ -642,6 +642,8 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* Zeilen nie stauchen: sonst schneidet der Binder unten Taschen ab, statt zu scrollen. */
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 12px;
 }
@@ -939,14 +941,14 @@
   justify-items: center;
   gap: 6px;
 }
-.stack {
+.pile {
   position: relative;
   width: 74px;
   height: 84px;
   display: grid;
   place-items: end center;
 }
-.stack:disabled {
+.pile:disabled {
   cursor: default;
 }
 .stack-fan {

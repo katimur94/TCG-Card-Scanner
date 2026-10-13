@@ -82,3 +82,29 @@ test('Einstellungen: Backup exportieren und wieder importieren', async ({ page }
   ]);
   expect(download.suggestedFilename()).toMatch(/^holoscan-backup-.*\.json$/);
 });
+
+test.describe('Kleines Handy', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test('Detailansicht nutzt die volle Breite, Binder scrollt bis zur letzten Tasche', async ({ page }) => {
+    await page.goto('./?view=search');
+    await page.getByRole('searchbox', { name: /Name, Set oder Nummer/ }).fill('Glurak');
+    await page.locator('.result', { hasText: 'Glurak' }).first().click();
+    await page.getByRole('button', { name: 'Merkliste' }).click();
+    await expect(page.locator('.post')).toHaveCount(1);
+    // Die Abschnitte der Karte sind volle Spalten, keine kleinen Kästchen
+    for (const box of await page.locator('.detail .panel').all()) {
+      expect((await box.boundingBox())!.width).toBeGreaterThan(300);
+    }
+    await expectNoOverflow(page, '.detail');
+
+    await page.goto('./?view=collection');
+    await page.getByRole('tab', { name: /Merkliste/ }).click();
+    await page.getByRole('button', { name: 'Filter' }).click();
+    const last = page.locator('.binder-page .pocket').last();
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport({ ratio: 1 });
+    await page.getByRole('button', { name: 'Nächste Seite' }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button', { name: 'Nächste Seite' })).toBeInViewport({ ratio: 1 });
+  });
+});
