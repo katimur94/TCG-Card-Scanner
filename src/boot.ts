@@ -4,10 +4,11 @@
 import { db } from './db/schema';
 import { migrateFromLegacy } from './db/migrate';
 import { useSettings } from './state/settings';
-import { toast, useUi } from './state/ui';
+import { toast, useUi, type InstallPrompt } from './state/ui';
 import { refreshPrices } from './domain/collection';
 import { cents } from './lib/util';
 import { loadSets } from './lib/api';
+import { nameDirectory } from './lib/identify';
 
 let started: Promise<void> | null = null;
 
@@ -50,7 +51,20 @@ async function start() {
 
   await useSettings.getState().load();
   loadSets().catch(() => {});
+  // Kartenindexe der Sammel-Sprachen im Hintergrund vorladen (Suche und Erkennung offline bereit)
+  setTimeout(() => {
+    for (const l of new Set(['en', ...useSettings.getState().settings.collectLangs])) void nameDirectory(l).catch(() => {});
+  }, 1500);
   registerSW();
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    useUi.getState().setInstall(e as unknown as InstallPrompt);
+  });
+  window.addEventListener('appinstalled', () => {
+    useUi.getState().setInstall(null);
+    toast({ text: 'HoloScan ist installiert', tone: 'gain' });
+  });
+  window.addEventListener('offline', () => toast({ text: 'Offline – Scannen geht weiter, Preise folgen später.' }));
   setTimeout(() => void backgroundRefresh(), 2500);
   setTimeout(() => backupReminder(), 4000);
 }

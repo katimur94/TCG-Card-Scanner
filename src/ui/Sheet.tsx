@@ -27,7 +27,25 @@ export function Sheet({
       () => ref.current?.querySelector<HTMLElement>('input, button:not([data-handle]), [tabindex]')?.focus(),
       60,
     );
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      // Fokus bleibt im Blatt (Tab läuft im Kreis)
+      if (e.key === 'Tab' && ref.current) {
+        const f = [...ref.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(
+          (el) => el.offsetParent !== null,
+        );
+        if (!f.length) return;
+        const first = f[0];
+        const last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => {
       clearTimeout(t);

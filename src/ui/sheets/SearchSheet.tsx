@@ -15,6 +15,8 @@ export function SearchSheet() {
   const open = useUi((s) => s.sheet === 'search');
   const openSheet = useUi((s) => s.openSheet);
   const openCard = useUi((s) => s.openCard);
+  const pick = useUi((s) => s.searchPick);
+  const pickCard = useUi((s) => s.pickCard);
   const { settings, update } = useSettings();
   const lang = settings.searchLang;
   const [q, setQ] = useState('');
@@ -40,13 +42,16 @@ export function SearchSheet() {
     return () => clearTimeout(t);
   }, [q, lang]);
 
+  // Suchsprache wechselt zwischen den Sammel-Sprachen (Einstellungen)
   const cycleLang = () => {
-    const i = LANGS.findIndex((l) => l.code === lang);
-    update({ searchLang: LANGS[(i + 1) % LANGS.length].code });
+    const list = LANGS.filter((l) => settings.collectLangs.includes(l.code));
+    const langs = list.length ? list : LANGS;
+    const i = langs.findIndex((l) => l.code === lang);
+    update({ searchLang: langs[(i + 1) % langs.length].code });
   };
 
   return (
-    <Sheet open={open} title="Karte suchen" onClose={() => openSheet(null)} full>
+    <Sheet open={open} title={pick ? 'Richtige Karte wählen' : 'Karte suchen'} onClose={() => pickCard(null)} full>
       <div className="stack">
         <div className="search-bar">
           <input
@@ -90,6 +95,11 @@ export function SearchSheet() {
                 <button
                   className="result"
                   onClick={() => {
+                    if (pick) {
+                      pick({ group: h.group, setId: h.setId, localId: h.localId, name: h.name, setName: h.set?.nl?.[lang] || h.set?.n });
+                      pickCard(null);
+                      return;
+                    }
                     openSheet(null);
                     openCard({
                       ref: {

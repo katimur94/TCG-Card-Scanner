@@ -52,7 +52,8 @@ export function postFromCard(p: NewPost, now = Date.now()): CollectionItem {
     alarmedAt: null,
     createdAt: now,
     updatedAt: now,
-    checkedAt: now,
+    // ohne Preis (z. B. offline hinzugefügt): beim nächsten Auffrischen sofort nachladen
+    checkedAt: priceCents == null ? null : now,
     rarity: p.data.rarity,
   };
 }

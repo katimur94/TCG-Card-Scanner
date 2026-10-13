@@ -14,8 +14,14 @@ export default defineConfig({
   use: {
     ...devices['Pixel 7'],
     baseURL: 'http://localhost:4173/TCG-Card-Scanner/',
-    launchOptions: { executablePath },
+    // Test-Kamera von Chrome (bewegtes Muster, keine echte Kamera nötig)
+    launchOptions: { executablePath, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+    permissions: ['camera'],
     serviceWorkers: 'allow',
+    // In der Cloud-Umgebung läuft Internet über einen Proxy (TCGdex, jsDelivr für Bildmodell/Texterkennung)
+    ...(process.env.HTTPS_PROXY
+      ? { proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' }, ignoreHTTPSErrors: true }
+      : {}),
   },
   webServer: {
     command: 'node e2e/serve.mjs dist 4173',

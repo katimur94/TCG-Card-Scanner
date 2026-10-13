@@ -2,6 +2,7 @@
 // Ersatzpreise aus Cardmarkets Preis-Guide und Ersatzbilder.
 
 import { getCard, imageUrl, guessImageBase, loadSets, findCards, loadCardIndex } from '../lib/api';
+import { nameDirectory } from '../lib/identify';
 import { cardmarketPrice } from '../lib/cardmarket';
 import { LANG } from '../lib/lang';
 import { variantsOf, type Variant } from '../lib/pricing';
@@ -127,4 +128,44 @@ export async function loadCardData(ref: CardRef): Promise<CardData> {
     official: shown.set?.cardCount?.official ?? set?.o ?? null,
     rarity: pc.rarity || null,
   };
+}
+
+/**
+ * Ohne Netz: Kartendaten nur aus dem Offline-Index (Name, Set, Bild-Adresse), ohne Preis.
+ * Reicht, um eine erkannte Karte in die Sammlung zu legen – der Preis wird später nachgeladen.
+ */
+export async function offlineCardData(ref: CardRef): Promise<CardData> {
+  const set = ref.set ?? (await loadSets()).byId.get(`${ref.region}:${ref.setId}`);
+  const dirLang = ref.region === 'ja' ? 'ja' : ref.lang;
+  const entry =
+    (await nameDirectory(dirLang).catch(() => null))?.get(ref.setId, ref.localId) ||
+    (await nameDirectory('en').catch(() => null))?.get(ref.setId, ref.localId);
+  const name = entry?.name || ref.name || ref.id;
+  const imgLang = ref.region === 'ja' ? 'ja' : entry?.hasImage ? dirLang : 'en';
+  const base = set ? guessImageBase(imgLang, set, ref.localId) : null;
+  const card: TcgdexCard = { id: ref.id, localId: ref.localId, name, set: { id: ref.setId, name: set?.nl?.[ref.lang] || set?.n || ref.setId } };
+  return {
+    ref: { ...ref, set },
+    display: card,
+    priceCard: card,
+    variants: [],
+    images: base ? [imageUrl(base, 'high')!] : [],
+    thumbs: base ? [imageUrl(base, 'low')!] : [],
+    imageBase: base,
+    altImage: false,
+    finish: 'matte',
+    setName: card.set.name,
+    setDate: set?.d || null,
+    official: set?.o ?? null,
+    rarity: null,
+  };
+}
+
+/** Online laden, sonst (offline/Fehler) aus dem Offline-Index. */
+export async function cardDataOrOffline(ref: CardRef): Promise<CardData & { offline?: boolean }> {
+  try {
+    return await loadCardData(ref);
+  } catch {
+    return { ...(await offlineCardData(ref)), offline: true };
+  }
 }

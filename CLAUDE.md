@@ -13,7 +13,8 @@ Quelle der Wahrheit; Abweichungen stehen begründet in `docs/FINDINGS.md`.
   (`skipWaiting`, versteht die alte Nachricht `'SKIP_WAITING'`).
 - Lokal zuerst: kein eigener Server, kein Konto, keine Analytics, keine Tracker.
 - Geldbeträge in der Datenbank immer als ganze Cent (`*Cents`). Anzeige in Euro.
-- Oberfläche Deutsch (Texte zentral in `src/i18n/de.ts`).
+- Oberfläche Deutsch. Die Texte stehen derzeit direkt in den Komponenten; eine zweite Sprache (Englisch)
+  ist vorbereitet, aber noch nicht umgesetzt (siehe `docs/FINDINGS.md`).
 - Keine geschützten Marken im Namen/Logo (kein „Pokémon“, keine Pokéball-Symbole).
 - Kein Scraping. Nur offizielle Dateien (Cardmarket-Preis-Guide/Produktkatalog auf
   `downloads.s3.cardmarket.com`) und die TCGdex-API.

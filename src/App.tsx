@@ -9,6 +9,7 @@ import { Toasts } from './ui/Toasts';
 import { boot } from './boot';
 import { useUi } from './state/ui';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+import { Triage } from './ui/stack/Triage';
 
 export function App() {
   const [ready, setReady] = useState(false);
@@ -49,6 +50,9 @@ export function App() {
       </ErrorBoundary>
       <ErrorBoundary label="Binder" onReset={() => useUi.getState().setBinder(false)}>
         <Binder />
+      </ErrorBoundary>
+      <ErrorBoundary label="Stapel" onReset={() => useUi.getState().setTriage(false)}>
+        <Triage />
       </ErrorBoundary>
       <ErrorBoundary label="Karte" onReset={() => useUi.getState().closeCard()}>
         <CardDetail />

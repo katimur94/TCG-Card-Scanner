@@ -52,3 +52,29 @@
    nutzbar, damit bestehende Einstellungen nicht verloren gehen. Der bisher eingebaute Schlüssel entfällt –
    er war im ausgelieferten JavaScript öffentlich lesbar.
 6. **Merkliste mit Preisalarm** bleibt erhalten (nicht in der Spec, aber bestehende Nutzerdaten).
+
+## Erkennung (M2/M3)
+
+- **Ablauf je Bild** (`src/scan/`, Bildteil im Web Worker):
+  1. Karten finden (`detect.ts`): Kantenbild → geschlossene Flächen → kleinstes umschließendes Rechteck →
+     Kartenformat 63:88 (±12 %). Liegen Karten aneinander (Binderseite), wird die Fläche in ein Raster
+     (bis 3×3) geteilt, wenn die Trennkanten auf ganzer Länge klar stärker sind als Linien in den Karten.
+     Ob eine Teilung stimmt, prüft zusätzlich die Bildsuche (eine Karte vs. Hälften – was passt besser
+     zum Katalog?). Füllt eine Karte fast das ganze Bild, greift die Kantensuche der ersten Version.
+  2. Entzerren, Bildsuche (DINOv2), bei Bedarf engere Ausschnitte (Toploader) und 180° gedreht.
+  3. Texterkennung nur, wenn das Bild nicht eindeutig ist (z. B. Nachdrucke mit gleichem Motiv) oder die
+     Sprache am Bild unklar bleibt – sie ist der langsamste Schritt.
+  4. Entscheidung „sicher“ oder „nachfragen“ (`recognize.ts`, Schwellen in `THRESHOLDS`).
+  5. Notfall: Gemini (eigener Schlüssel); das Ergebnis zählt nur, wenn Set + Nummer im Katalog passen.
+- **Kalibrierung** (`scripts/calib/`): künstliche Handyfotos aus echten Kartenbildern – Schräglage,
+  Spiegelung, Hülle, Finger, Unschärfe, Farbstich, Binderseiten, verstreute Karten; 3 Stufen. Die Bilder
+  bleiben im Cache (`.cache/`), nicht im Repository. `npm run build && node scripts/calib/calibrate.mjs`.
+  Ziel und Ergebnis: **null falsch-sichere Treffer**; die Schwellen sind so gewählt, dass alle Treffer im
+  Testset oberhalb der Schwelle richtig waren (mit Abstand zum ersten Fehler).
+- **Einschränkungen:** Karten müssen ganz im Bild liegen und dürfen sich nicht überlappen. Echte Fotos
+  fehlen im Testset noch – die Schwellen sollten mit echten Fotos nachkalibriert werden.
+- **Abweichung:** Kein YOLO-Modell für mehrere Karten; die Flächen-/Raster-Suche reicht im Testset und
+  braucht keinen zusätzlichen Download.
+- **Geschwindigkeit:** Bildsuche je Karte ca. 0,3–0,6 s (WASM, ein Thread, weil GitHub Pages keine
+  COOP/COEP-Header erlaubt), Texterkennung 2–4 s. Ziel der Spec (≤ 1,5 s) wird erreicht, wenn das Bild
+  allein entscheidet; mit Texterkennung nicht.

@@ -8,7 +8,17 @@ Sammelkarten in jeder Sprache erkennen, den **Cardmarket-Wert** sehen und die Sa
 
 ## Funktionen (neue Version)
 
-- **Scanner als Startbildschirm** mit Sammlungswert und Tagesänderung. Der neue Kamera-Scanner folgt in M2/M3.
+- **Scanner als Startbildschirm** mit Sammlungswert und Tagesänderung:
+  - löst automatisch aus, sobald Karten ruhig und scharf im Bild liegen
+  - bis zu 9 Karten pro Bild (ganze Binderseite), Doppel-Schutz
+  - die erkannten Karten fliegen auf einen **Stapel**
+- **Galerie:** beliebig viele Fotos auf einmal, Abarbeitung in einer Warteschlange.
+- **Stapel sortieren:**
+  - rechts wischen = in die Sammlung (danach nur die Kaufpreis-Frage)
+  - links wischen = verwerfen
+  - nach oben = korrigieren
+  - Ist die Erkennung unsicher, fragt die App mit höchstens 3 Vorschlägen nach, statt zu raten.
+- **Erkennung auf dem Gerät:** Bildsuche (DINOv2), Texterkennung nur bei Bedarf, Sprache am Kartenbild. Optional **Gemini** mit eigenem Schlüssel als Notfall. Jede KI-Antwort wird gegen den Katalog geprüft.
 - **Karte als Objekt:**
   - 3D-Kippen per Finger oder Gyroskop, Holo-Glanz je Seltenheit
   - Antippen dreht die Karte zum **Kurszettel**: Trendpreis, Kursverlauf, Ø 1/7/30 Tage, Tiefstpreis, dein Einstand, dein Gewinn

@@ -12,6 +12,7 @@ import { db } from '../../db/schema';
 import { migrateFromLegacy, MIGRATION_KEY, PORTFOLIO_KEY, type MigrationReport } from '../../db/migrate';
 import { Icon } from '../Icon';
 import { indexInfo } from '../../lib/api';
+import { AiSettings } from './AiSettings';
 
 const SITE_LANGS = [
   ['de', 'Deutsch'],
@@ -114,6 +115,8 @@ export function SettingsSheet() {
   return (
     <Sheet open={open} title="Einstellungen" onClose={() => openSheet(null)} full>
       <div className="stack settings">
+        <InstallSection />
+
         <section className="panel stack">
           <h3 className="h-sm">Sammel-Sprachen</h3>
           <p className="faint small">Bestimmt, welche Kartenindexe geladen werden.</p>
@@ -170,15 +173,7 @@ export function SettingsSheet() {
           )}
         </section>
 
-        <section className="panel stack">
-          <h3 className="h-sm">KI-Leser</h3>
-          <p className="faint small">
-            Gemini mit deinem eigenen Schlüssel als Notlösung bei schwierigen Karten – kommt mit dem Scanner-Update.
-            {settings.openrouterKey
-              ? ' Dein bisheriger OpenRouter-Schlüssel bleibt gespeichert und wird weiter genutzt.'
-              : ''}
-          </p>
-        </section>
+        <AiSettings />
 
         <section className="panel stack">
           <h3 className="h-sm">Daten</h3>
@@ -285,5 +280,37 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
       <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="toggle-track" aria-hidden />
     </label>
+  );
+}
+
+function InstallSection() {
+  const install = useUi((s) => s.install);
+  const setInstall = useUi((s) => s.setInstall);
+  const standalone = typeof matchMedia !== 'undefined' && matchMedia('(display-mode: standalone)').matches;
+  if (standalone) return null;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return (
+    <section className="panel stack">
+      <h3 className="h-sm">Als App installieren</h3>
+      {install ? (
+        <button
+          className="btn btn-primary"
+          onClick={async () => {
+            await install.prompt();
+            await install.userChoice.catch(() => null);
+            setInstall(null);
+          }}
+        >
+          <Icon name="download" /> HoloScan installieren
+        </button>
+      ) : (
+        <p className="faint small" style={{ margin: 0 }}>
+          {ios
+            ? 'Safari: Teilen-Symbol → „Zum Home-Bildschirm“.'
+            : 'Im Browser-Menü „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ wählen.'}{' '}
+          Danach startet HoloScan wie eine App und funktioniert auch offline.
+        </p>
+      )}
+    </section>
   );
 }
