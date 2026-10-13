@@ -261,6 +261,7 @@ function DetailBody({ open, onClose }: { open: OpenCard; onClose: () => void }) 
           <h3 id="own-h" className="h-sm">
             Deine Posten
           </h3>
+          <p className="faint small">Antippen zum Bearbeiten, Verkaufen oder als verloren Austragen.</p>
           <ul className="posts">
             {posts.map((p) => (
               <li key={p.id}>
