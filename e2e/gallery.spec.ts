@@ -8,8 +8,21 @@ import { shot } from './helpers';
 const root = join(import.meta.dirname, '..');
 test.setTimeout(180_000);
 
-/** Foto im Browser erzeugen: Karte leicht gedreht auf unruhigem Grund. */
-async function makePhoto(page: import('@playwright/test').Page, cards: Array<{ url: string; x: number; y: number; w: number; angle: number }>, size: [number, number]) {
+/**
+ * Foto im Browser erzeugen: Karten auf unruhigem Grund. Die Kartenbilder lädt Node (nicht der Browser),
+ * weil TCGdex bei manchen Bildern den CORS-Header doppelt schickt – für die App egal (sie zeigt Bilder nur an).
+ */
+async function makePhoto(
+  page: import('@playwright/test').Page,
+  request: import('@playwright/test').APIRequestContext,
+  cards: Array<{ url: string; x: number; y: number; w: number; angle: number }>,
+  size: [number, number],
+) {
+  const withData = [];
+  for (const c of cards) {
+    const res = await request.get(c.url);
+    withData.push({ ...c, b64: (await res.body()).toString('base64') });
+  }
   const b64 = await page.evaluate(
     async ({ cards, size }) => {
       const c = document.createElement('canvas');
@@ -21,10 +34,8 @@ async function makePhoto(page: import('@playwright/test').Page, cards: Array<{ u
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, c.width, c.height);
       for (const k of cards) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = k.url;
-        await img.decode();
+        const bytes = Uint8Array.from(atob(k.b64), (ch) => ch.charCodeAt(0));
+        const img = await createImageBitmap(new Blob([bytes], { type: 'image/webp' }));
         const h = (k.w * 88) / 63;
         ctx.save();
         ctx.translate(k.x, k.y);
@@ -34,7 +45,7 @@ async function makePhoto(page: import('@playwright/test').Page, cards: Array<{ u
       }
       return c.toDataURL('image/jpeg', 0.88).split(',')[1];
     },
-    { cards, size },
+    { cards: withData, size },
   );
   return Buffer.from(b64, 'base64');
 }
@@ -43,9 +54,9 @@ test.beforeEach(async ({ request }) => {
   await request.get(`/__roots?set=${encodeURIComponent(join(root, 'dist'))}`);
 });
 
-test('Galerie: Foto erkennen, Stapel sortieren, in die Sammlung', async ({ page }) => {
+test('Galerie: Foto erkennen, Stapel sortieren, in die Sammlung', async ({ page, request }) => {
   await page.goto('./');
-  const photo = await makePhoto(page, [{ url: 'https://assets.tcgdex.net/en/swsh/swsh3/136/high.webp', x: 540, y: 720, w: 760, angle: 3 }], [1080, 1440]);
+  const photo = await makePhoto(page, request, [{ url: 'https://assets.tcgdex.net/en/swsh/swsh3/136/high.webp', x: 540, y: 720, w: 760, angle: 3 }], [1080, 1440]);
   await page.locator('input[type=file][multiple]').setInputFiles({ name: 'karte.jpg', mimeType: 'image/jpeg', buffer: photo });
   // Stapel bekommt eine Karte
   await expect(page.locator('.stack-count')).toHaveText('1', { timeout: 150_000 });
@@ -63,12 +74,12 @@ test('Galerie: Foto erkennen, Stapel sortieren, in die Sammlung', async ({ page 
   await expect(page.locator('.pocket:not(.pocket-empty)')).toHaveCount(1);
 });
 
-test('Galerie: Binderseite mit mehreren Karten', async ({ page }) => {
+test('Galerie: Binderseite mit mehreren Karten', async ({ page, request }) => {
   await page.goto('./');
   const urls = ['swsh3/136', 'swsh3/50', 'swsh3/19', 'swsh4/25'].map((p) => `https://assets.tcgdex.net/en/swsh/${p}/high.webp`);
   const w = 300;
   const cards = urls.map((url, i) => ({ url, x: 220 + (i % 2) * (w + 40), y: 260 + Math.floor(i / 2) * ((w * 88) / 63 + 40), w, angle: 0 }));
-  const photo = await makePhoto(page, cards, [880, 1100]);
+  const photo = await makePhoto(page, request, cards, [880, 1100]);
   await page.locator('input[type=file][multiple]').setInputFiles({ name: 'seite.jpg', mimeType: 'image/jpeg', buffer: photo });
   await expect(page.locator('.stack-count')).toHaveText('4', { timeout: 170_000 });
 });

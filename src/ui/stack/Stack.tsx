@@ -19,7 +19,7 @@ function Mini({ e, i, n }: { e: StackEntry; i: number; n: number }) {
       transition={{ type: 'spring', stiffness: 260, damping: 22 }}
       style={{ zIndex: 10 - k }}
     >
-      <FallbackImg sources={[...thumbs, photo].filter((x): x is string => !!x)} alt={e.best?.name || 'Karte'} />
+      <FallbackImg sources={[...thumbs, photo].filter((x): x is string => !!x)} alt={e.best?.name || 'Karte'} eager />
       {e.status !== 'sure' && <span className="stack-ask" aria-hidden>?</span>}
     </motion.div>
   );

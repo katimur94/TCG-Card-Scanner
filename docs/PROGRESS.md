@@ -91,21 +91,87 @@ Kartenbilder sind in den Tests Platzhalter, weil die TCGdex-Antworten aus festen
 - App-Bundle: 175 KB gzip (Budget laut Spec: 400 KB)
 - Vorab-Cache: 0,95 MB
 
-## Freigabe
-**Noch nicht veröffentlichen.** Der Branch ersetzt die alte App komplett, und die alte App hat einen funktionierenden Kamera-Scanner. Würde M1 jetzt live gehen, könnten die Nutzer vorübergehend nicht mehr scannen. Vorschlag: zuerst M2 (Galerie-Scan) und M3 (Live-Scan) umsetzen, dann alles zusammen als großes Update veröffentlichen.
+## M2 Galerie-Scan, M3 Live-Scan, M4 Fallbacks, M5 Feinschliff – erledigt (13.10.2026)
 
-## Nächste Schritte
-- **M2 Galerie-Scan**:
-  - Erkennung aus `legacy/js/vision.js`, `ocr.js` und `recognize.js` nach TypeScript in einen Web Worker übertragen
-  - Stapel mit Triage: rechts = Sammlung, links = verwerfen, oben = korrigieren
-  - Kalibrier-Testset aus echten Fotos
-- **M3 Live-Scan**:
-  - automatisches Auslösen bei ruhigem und scharfem Bild
-  - mehrere Karten pro Bild
-  - Doppel-Schutz und Haptik
-- **M4**: Gemini-Fallback mit Modell-Kette und Limit-Anzeige
-- **M5**: Feinschliff
+### Erkennung
+Neu in `src/scan/`. Das Finden der Karten im Bild und die Bildsuche laufen in einem Web Worker, die Oberfläche bleibt flüssig.
+
+- **Mehrere Karten pro Bild** (bis 9):
+  - Flächen im Kantenbild werden auf das Kartenformat geprüft.
+  - Eine Binderseite wird in ein Raster geteilt.
+  - Ob eine Teilung stimmt, prüft die Bildsuche gegen. Füllt eine Karte das ganze Bild, greift die Kantensuche der ersten Version.
+- **Bildsuche** mit dem bestehenden DINOv2-Modell:
+  - engere Ausschnitte für Toploader, notfalls um 180° gedreht
+  - Gegenstände ohne Ähnlichkeit zu einer Karte werden verworfen
+- **Texterkennung nur bei Bedarf**, etwa bei Nachdrucken mit gleichem Motiv oder wenn die Sprache am Bild unklar ist.
+- **„Sicher“ oder „nachfragen“:** Ist die Erkennung unsicher, bietet die App höchstens 3 Vorschläge oder die Suche an.
+- **KI-Leser (M4):**
+  - Gemini mit eigenem Schlüssel
+  - Modell-Kette aus der Modell-Liste der API, keine fest eingebauten Namen
+  - Tageszähler je Modell mit Neustart nach pazifischer Zeit, änderbare Limits, bei 429 das nächste Modell
+  - Ein Ergebnis zählt nur, wenn Set und Nummer im Katalog passen.
+  - Ein bestehender OpenRouter-Schlüssel funktioniert weiter.
+
+### Kalibrierung
+Gemessen mit `scripts/calib/` an künstlichen Handyfotos aus 120 echten Karten: Schräglage, Spiegelung, Hülle, Finger, Unschärfe, Binderseiten, verstreute Karten; 3 Schwierigkeitsstufen.
+
+| Art | Karten | gefunden | sicher | davon falsch | nachfragen | Ø Zeit je Bild |
+|---|---|---|---|---|---|---|
+| Einzelkarte | 72 | 100 % | 72 % | **0** | 28 % | 2,8 s |
+| Binderseite (9 Karten) | 27 | 85 % | 61 % | **0** | 39 % | 26 s |
+| verstreute Karten | 17 | 53 % | 56 % | **0** | 44 % | 4,9 s |
+
+Ziel der Spec erreicht: **null falsch-sichere Treffer.** Gegenüber dem ersten Lauf ist die Quote der sicheren Treffer höher (Einzelkarte 57 % → 72 %), die Fehlalarme sind von 19 auf 0 gesunken und die Zeit pro Einzelkarte von 4,2 auf 2,8 s.
+
+Grenzen:
+- Karten müssen ganz im Bild liegen und dürfen sich nicht überlappen.
+- Die Schwellen sollten mit echten Fotos nachkalibriert werden.
+
+### Galerie, Stapel, Triage (M2)
+- Beliebig viele Fotos auf einmal. Die Warteschlange und der Stapel überstehen einen Neustart der App.
+- Fortschritt als Ring am Stapel.
+- **Triage:**
+  - rechts = Sammlung, danach nur die Kaufpreis-Frage
+  - links = verwerfen
+  - oben = korrigieren: andere Karte, Sprache oder Variante
+  - Jede Geste hat auch einen Knopf; Rückgängig steht 5 Sekunden bereit.
+- Ohne Kartenbild in der Datenbank wird das eigene Foto gespeichert.
+- Offline lässt sich eine Karte in die Sammlung legen; der Preis folgt, sobald wieder Netz da ist.
+
+### Live-Scan (M3)
+- Rückkamera mit 1080p. Etwa 8 Vorschaubilder pro Sekunde, die Karten werden umrandet.
+- **Auslösen** nach 5 ruhigen Bildern (unter 6 px Bewegung bei 720p) und ausreichender Schärfe. Zusätzlich gibt es einen Auslöse-Knopf.
+- **Doppel-Schutz:**
+  - Dieselbe Karte, die im Bild bleibt, wird nicht erneut erkannt.
+  - Kommt eine gleiche Karte dazu, fragt die App: „Nochmal hinzufügen?“
+- Die erkannten Karten fliegen aus dem Livebild auf den Stapel, mit Haptik.
+- Taschenlampe; Hinweis „leicht kippen“ bei Spiegelung.
+- Die Kamera ist aus, solange Binder, Karte, Triage oder Einstellungen offen sind oder die App im Hintergrund läuft.
+- Der frühere Fehler, bei dem die Kamera doppelt geöffnet wurde und die LED anblieb, ist behoben.
+
+### Feinschliff (M5)
+- Knopf „App installieren“ in den Einstellungen, Hinweis für iOS.
+- Der Fokus bleibt in Blättern (Tab läuft im Kreis), Escape schließt sie.
+- Sammel-Sprachen steuern die vorgeladenen Indexe und die Suchsprachen.
+- Eine Fehlergrenze je Bereich verhindert, dass ein Fehler die ganze App leert.
+
+### Tests
+- `npm test`: 36 Unit-Tests. Neu sind Kartensuche (einzeln, verstreut, Binderseite gerade/schräg, leerer Grund), Auslöse-Logik und Doppel-Schutz sowie der KI-Client (Tageswechsel, Modell-Kette).
+- `npm run e2e`: 7 Browser-Tests. Neu sind der Galerie-Scan mit **echter Erkennung** (Einzelkarte und Binderseite) und die Live-Kamera mit Chromes Test-Kamera: Sie startet, erfindet keine Karte und schaltet sich ab, wenn der Binder offen ist.
+
+| | |
+|---|---|
+| ![Stapel](screenshots/10-stapel.jpg) | ![Triage](screenshots/11-triage.jpg) |
+
+## Freigabe
+Der neue Stand hat jetzt einen eigenen Scanner und ersetzt die alte App vollständig. Für die Veröffentlichung muss dieser Branch in den Standard-Branch `ccr-a44fa02f-ylk895` gemergt werden. Danach baut und veröffentlicht der Workflow automatisch. Beim nächsten Öffnen übernimmt die App die Sammlungen der Nutzer.
+
+Vor dem Mergen empfohlen:
+1. Einmal am eigenen Handy testen, und zwar mit der Vorschau des Branches oder lokal per `npm run build && npx vite preview --host`.
+2. Den OpenRouter-Schlüssel im GitHub-Secret `OPENROUTER_KEY` widerrufen und das Secret löschen. Er wird nicht mehr gebraucht.
 
 ## Offene Punkte
-- Nutzungsbedingungen des Cardmarket-Preis-Guides vor einer breiteren Veröffentlichung klären (siehe `FINDINGS.md`).
-- Der eingebaute OpenRouter-Schlüssel ist entfernt. Der Schlüssel im GitHub-Secret `OPENROUTER_KEY` war öffentlich lesbar und sollte bei OpenRouter **widerrufen** werden.
+- Schwellen mit echten Fotos nachkalibrieren. Dafür eigene Fotos nach `.cache/calib/scenes/` legen und in `truth.json` eintragen.
+- Nutzungsbedingungen des Cardmarket-Preis-Guides klären (siehe `FINDINGS.md`).
+- Englische Oberfläche ist vorbereitet, aber noch nicht umgesetzt.
+- Binderseiten mit 9 Karten brauchen etwa 25 s. Schneller ginge es mit mehreren Threads, das erlaubt GitHub Pages aber nicht (COOP/COEP).

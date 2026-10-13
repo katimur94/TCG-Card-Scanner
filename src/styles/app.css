@@ -937,12 +937,12 @@
 .scanner-center {
   display: grid;
   justify-items: center;
-  gap: 2px;
+  gap: 6px;
 }
 .stack {
   position: relative;
   width: 74px;
-  height: 92px;
+  height: 84px;
   display: grid;
   place-items: end center;
 }
