@@ -1,7 +1,6 @@
-// KI-Leser (nur Notfall-Fallback, mit dem Schlüssel des Nutzers, direkt aus dem Browser):
-//  - Gemini: Modell-Kette (z. B. Flash Lite -> Flash), geprüft gegen die Modell-Liste der API,
-//    eigener Tageszähler je Modell (Reset Mitternacht pazifischer Zeit), bei 429 nächstes Modell.
-//  - OpenRouter: bleibt für Nutzer der ersten Version, die dort schon einen Schlüssel eingetragen hatten.
+// KI-Leser (nur Notfall-Fallback, mit dem Gemini-Schlüssel des Nutzers, direkt aus dem Browser):
+// Modell-Kette (z. B. Flash Lite -> Flash), geprüft gegen die Modell-Liste der API,
+// eigener Tageszähler je Modell (Reset Mitternacht pazifischer Zeit), bei 429 nächstes Modell.
 // Das Ergebnis wird immer gegen den Katalog geprüft (siehe recognize.ts) – der Name allein reicht nie.
 
 import { db } from '../db/schema';
@@ -28,7 +27,6 @@ export class AiError extends Error {
 
 const LANGS = ['de', 'en', 'fr', 'es', 'it', 'pt', 'ja'];
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
-const OPENROUTER = 'https://openrouter.ai/api/v1/chat/completions';
 
 export const PROMPT = `You are reading a photo of a single collectible trading card. Read the printed text exactly.
 Return JSON with: region ("intl" or "ja" – Japanese print), language (de, en, fr, es, it, pt or ja),
@@ -134,26 +132,6 @@ async function geminiOnce(key: string, model: string, jpegB64: string, timeout =
   }
 }
 
-// ---------- OpenRouter (Bestandsnutzer) ----------
-
-async function openrouterOnce(key: string, model: string, jpegB64: string): Promise<AiCardRead> {
-  const res = await fetch(OPENROUTER, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'HoloScan' },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      max_tokens: 300,
-      messages: [{ role: 'user', content: [{ type: 'text', text: `${PROMPT}\nAnswer ONLY with the JSON object.` }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpegB64}` } }] }],
-    }),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || data?.error) throw new AiError(data?.error?.message || `HTTP ${res.status}`, data?.error?.code || res.status);
-  const out = parse(data?.choices?.[0]?.message?.content);
-  if (!out) throw new AiError('KI-Antwort nicht lesbar', 0);
-  return { ...out, model };
-}
-
 function parse(text: unknown): Omit<AiCardRead, 'model'> | null {
   const m = String(text || '').match(/\{[\s\S]*\}/);
   if (!m) return null;
@@ -180,22 +158,15 @@ function parse(text: unknown): Omit<AiCardRead, 'model'> | null {
 // ---------- Kette ----------
 
 export interface AiConfig {
-  provider: 'gemini' | 'openrouter';
   geminiKey: string;
   geminiModels: string[];
   geminiLimits: Record<string, number>;
-  openrouterKey: string;
-  openrouterModel: string;
 }
 
-export const aiAvailable = (c: AiConfig) => (c.provider === 'gemini' ? !!c.geminiKey && c.geminiModels.length > 0 : !!c.openrouterKey);
+export const aiAvailable = (c: AiConfig) => !!c.geminiKey && c.geminiModels.length > 0;
 
 /** Karte lesen lassen; springt bei Limit (429) oder vollem Tageszähler zum nächsten Modell der Kette. */
 export async function readCardAI(jpegB64: string, c: AiConfig): Promise<AiCardRead> {
-  if (c.provider === 'openrouter') {
-    if (!c.openrouterKey) throw new AiError('Kein Schlüssel', 401);
-    return openrouterOnce(c.openrouterKey, c.openrouterModel, jpegB64);
-  }
   if (!c.geminiKey) throw new AiError('Kein Schlüssel', 401);
   let last: unknown = new AiError('Alle Modelle haben ihr Tageslimit erreicht', 429);
   for (const model of c.geminiModels) {

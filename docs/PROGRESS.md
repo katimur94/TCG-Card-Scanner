@@ -10,7 +10,7 @@ Der Umbau läuft auf dem Branch `claude/trusting-ramanujan-rxy6ep`. Veröffentli
   - Sammlung, Merkliste und Preisalarme
   - eigene Scan-Fotos
   - Scan-Verlauf, eigene Preisverläufe und Wertverlauf
-  - Einstellungen, auch einen eingetragenen OpenRouter-Schlüssel
+  - Einstellungen (ohne OpenRouter-Schlüssel – OpenRouter ist entfernt)
 - Die alte Datenbank wird nur gelesen und nie verändert.
 - Die Übernahme läuft genau einmal und ist idempotent. Unter „Einstellungen → Erneut prüfen“ lässt sie sich erneut anstoßen und ergänzt dann nur, was fehlt.
 - „Alles löschen“ holt die alten Daten nicht zurück.
@@ -110,7 +110,6 @@ Neu in `src/scan/`. Das Finden der Karten im Bild und die Bildsuche laufen in ei
   - Modell-Kette aus der Modell-Liste der API, keine fest eingebauten Namen
   - Tageszähler je Modell mit Neustart nach pazifischer Zeit, änderbare Limits, bei 429 das nächste Modell
   - Ein Ergebnis zählt nur, wenn Set und Nummer im Katalog passen.
-  - Ein bestehender OpenRouter-Schlüssel funktioniert weiter.
 
 ### Kalibrierung
 Gemessen mit `scripts/calib/` an künstlichen Handyfotos aus 120 echten Karten: Schräglage, Spiegelung, Hülle, Finger, Unschärfe, Binderseiten, verstreute Karten; 3 Schwierigkeitsstufen.
@@ -168,7 +167,7 @@ Der neue Stand hat jetzt einen eigenen Scanner und ersetzt die alte App vollstä
 
 Vor dem Mergen empfohlen:
 1. Einmal am eigenen Handy testen, und zwar mit der Vorschau des Branches oder lokal per `npm run build && npx vite preview --host`.
-2. Den OpenRouter-Schlüssel im GitHub-Secret `OPENROUTER_KEY` widerrufen und das Secret löschen. Er wird nicht mehr gebraucht.
+2. Den OpenRouter-Schlüssel bei OpenRouter widerrufen und das GitHub-Secret `OPENROUTER_KEY` löschen – die App nutzt OpenRouter nicht mehr.
 
 ## Offene Punkte
 - Schwellen mit echten Fotos nachkalibrieren. Dafür eigene Fotos nach `.cache/calib/scenes/` legen und in `truth.json` eintragen.

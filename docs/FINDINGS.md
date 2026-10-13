@@ -48,9 +48,9 @@
 4. **Datenformate bleiben vorerst** (`data/sets.json`, `data/cards-{lang}.json`, `data/vision/…`). Sie
    funktionieren, sind kompakt, und Erkennung und Suche bauen darauf auf. Neu dazu kommt
    `data/prices/history/{shard}.json`.
-5. **KI-Leser:** Gemini mit eigenem Schlüssel (Spec). Ein bereits eingetragener OpenRouter-Schlüssel bleibt
-   nutzbar, damit bestehende Einstellungen nicht verloren gehen. Der bisher eingebaute Schlüssel entfällt –
-   er war im ausgelieferten JavaScript öffentlich lesbar.
+5. **KI-Leser:** nur Gemini mit eigenem Schlüssel (Spec). OpenRouter ist vollständig entfernt: der bisher
+   eingebaute Schlüssel (war im ausgelieferten JavaScript öffentlich lesbar) und ein in der alten Version
+   eingetragener Schlüssel werden nicht übernommen.
 6. **Merkliste mit Preisalarm** bleibt erhalten (nicht in der Spec, aber bestehende Nutzerdaten).
 
 ## Erkennung (M2/M3)

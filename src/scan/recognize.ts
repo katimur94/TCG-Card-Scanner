@@ -183,12 +183,9 @@ export async function recognizeCard(
   //    Set + Nummer müssen passen, der Name allein reicht nie.
   const s = getSettings();
   const ai = {
-    provider: s.aiProvider,
     geminiKey: s.geminiKey,
     geminiModels: s.geminiModels,
     geminiLimits: s.geminiLimits,
-    openrouterKey: s.openrouterKey,
-    openrouterModel: s.openrouterModel,
   };
   let aiUsed: AiCardRead | null = null;
   if (status === 'ask' && card.straight && opts.allowAi !== false && aiAvailable(ai) && navigator.onLine) {

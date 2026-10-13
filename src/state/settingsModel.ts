@@ -1,7 +1,5 @@
 // Einstellungen: Standardwerte und Übernahme aus der alten App.
 
-export type AiProvider = 'gemini' | 'openrouter';
-
 export interface AppSettings {
   scanLang: string; // 'auto' oder Sprachcode
   fallbackLang: string;
@@ -14,13 +12,9 @@ export interface AppSettings {
   vision: boolean;
   showUSD: boolean;
   conditionFactors: Record<number, number> | null;
-  aiProvider: AiProvider;
   geminiKey: string;
   geminiModels: string[]; // Modell-Kette, geprüft gegen die Modell-Liste der API
   geminiLimits: Record<string, number>; // Tageslimit je Modell (änderbar)
-  openrouterKey: string;
-  openrouterModel: string;
-  aiMode: 'auto' | 'always';
   backupReminderDays: number | null; // Erinnerung alle n Tage
   lastBackupAt: number | null;
 }
@@ -37,13 +31,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   vision: true,
   showUSD: true,
   conditionFactors: null,
-  aiProvider: 'gemini',
   geminiKey: '',
   geminiModels: [],
   geminiLimits: {},
-  openrouterKey: '',
-  openrouterModel: 'google/gemma-4-31b-it:free',
-  aiMode: 'auto',
   backupReminderDays: null,
   lastBackupAt: null,
 };
@@ -81,13 +71,6 @@ export function settingsFromLegacy(old: Record<string, unknown> | null | undefin
     }
     if (Object.keys(f).length) out.conditionFactors = f;
   }
-  const key = str('aiKey')?.trim();
-  if (key) {
-    out.openrouterKey = key;
-    out.aiProvider = 'openrouter';
-  }
-  assign('openrouterModel', str('aiModel')?.trim() || undefined);
-  const mode = str('aiMode');
-  if (mode === 'auto' || mode === 'always') out.aiMode = mode;
+  // Der eingebaute bzw. eingetragene OpenRouter-Schlüssel der ersten Version wird bewusst nicht übernommen.
   return out;
 }

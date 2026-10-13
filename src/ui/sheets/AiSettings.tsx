@@ -1,5 +1,5 @@
 // KI-Leser einrichten: Gemini-Schlüssel (nur auf dem Gerät), Test über die Modell-Liste, Modell-Kette,
-// Tageszähler je Modell mit änderbaren Limits. OpenRouter bleibt für Bestandsnutzer.
+// Tageszähler je Modell mit änderbaren Limits.
 
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -34,7 +34,7 @@ export function AiSettings() {
       const { models: list, chain } = await testGeminiKey(k);
       setModels(list);
       const keep = settings.geminiModels.filter((m) => list.some((x) => x.id === m));
-      await update({ geminiKey: k, aiProvider: 'gemini', geminiModels: keep.length ? keep : chain });
+      await update({ geminiKey: k, geminiModels: keep.length ? keep : chain });
       setStatus(`Key funktioniert – ${list.length} Modelle verfügbar.`);
     } catch (e) {
       setStatus(`Fehler: ${(e as Error).message}`);
@@ -96,7 +96,7 @@ export function AiSettings() {
             onClick={() => {
               setKey('');
               setModels(null);
-              void update({ geminiKey: '', geminiModels: [], aiProvider: settings.openrouterKey ? 'openrouter' : 'gemini' });
+              void update({ geminiKey: '', geminiModels: [] });
               toast({ text: 'Schlüssel entfernt' });
             }}
           >
@@ -167,18 +167,6 @@ export function AiSettings() {
         </div>
       )}
 
-      {settings.openrouterKey && (
-        <div className="stack">
-          <label className="toggle">
-            <span>Bisherigen OpenRouter-Schlüssel statt Gemini nutzen</span>
-            <input type="checkbox" role="switch" checked={settings.aiProvider === 'openrouter'} onChange={(e) => update({ aiProvider: e.target.checked ? 'openrouter' : 'gemini' })} />
-            <span className="toggle-track" aria-hidden />
-          </label>
-          <button className="btn btn-sm btn-ghost" onClick={() => update({ openrouterKey: '', aiProvider: 'gemini' })}>
-            OpenRouter-Schlüssel entfernen
-          </button>
-        </div>
-      )}
     </section>
   );
 }

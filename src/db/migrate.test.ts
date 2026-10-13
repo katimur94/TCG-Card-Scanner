@@ -166,11 +166,9 @@ describe('Übernahme aus der alten App', () => {
       fallbackLang: 'en',
       condition: 3,
       haptics: false,
-      openrouterKey: 'sk-or-test',
-      aiProvider: 'openrouter',
-      openrouterModel: 'x/y:free',
-      aiMode: 'always',
     });
+    // Der OpenRouter-Schlüssel der alten Version wird nicht übernommen
+    expect(JSON.stringify(settings)).not.toContain('sk-or-test');
     expect((await db.settings.get(PORTFOLIO_KEY))?.value).toEqual([{ d: '2026-10-01', c: 2998, n: 2 }]);
   });
 
