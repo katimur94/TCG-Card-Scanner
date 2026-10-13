@@ -25,17 +25,28 @@ export function blur(src: Float32Array, w: number, h: number, sigma = 1.2): Floa
   for (let i = 0; i < k.length; i++) k[i] /= sum;
   const tmp = new Float32Array(src.length);
   const out = new Float32Array(src.length);
+  const kk = Float64Array.from(k);
+  const n = 2 * r + 1;
+  // Innen ohne Randspiegelung (schnell), nur an den Rändern refl()
   for (let y = 0; y < h; y++) {
+    const row = y * w;
     for (let x = 0; x < w; x++) {
       let a = 0;
-      for (let i = -r; i <= r; i++) a += src[y * w + refl(x + i, w)] * k[i + r];
-      tmp[y * w + x] = a;
+      if (x >= r && x < w - r) {
+        const b = row + x - r;
+        for (let i = 0; i < n; i++) a += src[b + i] * kk[i];
+      } else for (let i = -r; i <= r; i++) a += src[row + refl(x + i, w)] * kk[i + r];
+      tmp[row + x] = a;
     }
   }
   for (let y = 0; y < h; y++) {
+    const inner = y >= r && y < h - r;
     for (let x = 0; x < w; x++) {
       let a = 0;
-      for (let i = -r; i <= r; i++) a += tmp[refl(y + i, h) * w + x] * k[i + r];
+      if (inner) {
+        let j = (y - r) * w + x;
+        for (let i = 0; i < n; i++, j += w) a += tmp[j] * kk[i];
+      } else for (let i = -r; i <= r; i++) a += tmp[refl(y + i, h) * w + x] * kk[i + r];
       out[y * w + x] = a;
     }
   }
@@ -88,6 +99,37 @@ export function quadAspect(q: Quad): number {
 
 // ---------- 1) Eine Karte, die das Bild füllt ----------
 
+/** Median (gerade Anzahl: Mittel der beiden mittleren Werte) per Quickselect – ordnet a dabei teilweise um. */
+function median(a: Float32Array): number {
+  const n = a.length;
+  const k = n >> 1;
+  let lo = 0;
+  let hi = n - 1;
+  while (lo < hi) {
+    const pivot = a[(lo + hi) >> 1];
+    let i = lo;
+    let j = hi;
+    while (i <= j) {
+      while (a[i] < pivot) i++;
+      while (a[j] > pivot) j--;
+      if (i <= j) {
+        const t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+        i++;
+        j--;
+      }
+    }
+    if (k <= j) hi = j;
+    else if (k >= i) lo = i;
+    else break;
+  }
+  if (n & 1) return a[k];
+  let below = -Infinity;
+  for (let i = 0; i < k; i++) if (a[i] > below) below = a[i];
+  return (below + a[k]) / 2;
+}
+
 const SLOPES = Array.from({ length: 41 }, (_, i) => -0.2 + i * 0.01);
 
 /**
@@ -118,8 +160,7 @@ function bestLine(g: Float32Array, W: number, H: number, vertical: boolean, lo: 
         vals[k] = v;
         sum += v;
       }
-      vals.sort();
-      const score = 0.25 * (vals[n / 2 - 1] + vals[n / 2]) + (0.5 * sum) / n;
+      const score = 0.5 * median(vals) + (0.5 * sum) / n;
       best[i * cols + j] = score;
       if (score > m) m = score;
     }
@@ -154,9 +195,8 @@ function quadOk(q: Quad, w: number, h: number, minArea = 0.35) {
   return asp > 0.85 * CARD_RATIO && asp < 1.15 * CARD_RATIO && quadArea(q) / (w * h) > minArea;
 }
 
-/** Vier Ecken einer Karte, die den Großteil des Bildes füllt – oder null. */
-export function findCardQuad(img: RGBA): Quad | null {
-  const W = 300;
+/** Vier Ecken einer Karte, die den Großteil des Bildes füllt – oder null. W: Arbeitsbreite (Live-Vorschau kleiner). */
+export function findCardQuad(img: RGBA, W = 300): Quad | null {
   const s = W / img.width;
   const H = Math.round(img.height * s);
   const small = resize(img, W, H);
@@ -608,10 +648,13 @@ function sortReading(list: Detection[]): Detection[] {
 /**
  * Karten im Bild: erst die Mehrkarten-Suche; findet sie nichts (z. B. Karte füllt das Bild und berührt
  * den Rand), die Einzelkarten-Suche; sonst null.
+ * fast (Live-Vorschau): die Einzelkarten-Suche nur, wenn ihr Ergebnis etwas ändern kann, und kleiner gerechnet.
  */
-export function detectCards(img: RGBA, opts: { side?: number; max?: number } = {}): Detection[] {
+export function detectCards(img: RGBA, opts: { side?: number; max?: number; fast?: boolean } = {}): Detection[] {
   const multi = findCardQuads(img, opts);
-  const one = findCardQuad(img);
+  // Mehr als zwei Treffer oder lauter ungeteilte Flächen: die Einzelkarten-Suche würde nichts ändern
+  if (opts.fast && multi.length && (multi.length > 2 || multi.every((d) => !d.cell))) return multi;
+  const one = findCardQuad(img, opts.fast ? 240 : 300);
   if (one) {
     // Findet die Mehrkarten-Suche nur Teile einer großen Karte (z. B. das Bildfenster, wenn sich der helle
     // Kartenrand nicht vom Untergrund abhebt), gewinnt die Einzelkarten-Suche.
