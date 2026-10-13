@@ -2,7 +2,7 @@
 // Hintergrund-Thread für die Bilderkennung: Karten finden, entzerren, Bildsuche, Sprache am Bild.
 // So bleibt die Oberfläche flüssig, auch wenn das Bildmodell rechnet.
 
-import { detectCards, findCardQuads, flipQuad, insetQuad, straighten, warp } from './detect';
+import { detectCards, flipQuad, insetQuad, straighten, warp } from './detect';
 import { embed, languageFromImage, nearest, setBase, warmup, visionReady, type Match } from './embed';
 import { glare, sharpness, type Quad, type RGBA } from './rgba';
 import type { VisionRequest, VisionResponse, FoundCard } from './visionProtocol';
@@ -90,8 +90,10 @@ self.onmessage = async (e: MessageEvent<VisionRequest>) => {
         reply({ id: m.id, ok: true, result: visionReady() });
         break;
       case 'detect': {
-        // schnell: nur Karten finden (Live-Vorschau, Ruhe-Erkennung)
-        const dets = findCardQuads(m.image, { side: m.side ?? 360 });
+        // schnell: nur Karten finden (Live-Vorschau, Ruhe-Erkennung). Wie bei der Aufnahme mit der
+        // Einzelkarten-Suche als Rückfall – sonst zerfällt eine Karte in Hülle oder auf hellem Grund oft in Teile
+        // oder wird gar nicht gefunden, und die Vorschau kommt nie zur Ruhe.
+        const dets = detectCards(m.image, { side: m.side ?? 360, fast: true });
         reply({ id: m.id, ok: true, result: { quads: dets.map((d) => d.quad), sharp: sharpness(m.image) } });
         break;
       }

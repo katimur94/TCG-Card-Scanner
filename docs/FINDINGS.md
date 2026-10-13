@@ -78,3 +78,43 @@
 - **Geschwindigkeit:** Bildsuche je Karte ca. 0,3–0,6 s (WASM, ein Thread, weil GitHub Pages keine
   COOP/COEP-Header erlaubt), Texterkennung 2–4 s. Ziel der Spec (≤ 1,5 s) wird erreicht, wenn das Bild
   allein entscheidet; mit Texterkennung nicht.
+
+## Live-Scan: Auslösen aus der Hand (13.10.2026)
+
+- **Problem:** Mit Hülle/Toploader oder leicht wackelnder Hand löste die Live-Kamera oft gar nicht aus
+  (Rückmeldung: „über eine Minute stillhalten“). Ursachen:
+  1. Die Vorschau nutzte nur die Mehrkarten-Suche. Sie zerlegt eine Karte in Hülle, auf hellem Grund oder mit
+     Finger am Rand oft in zwei Hälften oder findet nichts – die Kartenzahl springt, der Zähler fängt von vorn an.
+  2. Der Auslöser verlangte 5 Bilder in Folge mit höchstens 6 px (bezogen auf 720p) Eckbewegung Bild zu Bild,
+     gemessen an der schlechtesten Ecke. Schon das Zittern der Hand und eine von einer Spiegelung verschobene
+     Ecke überschreiten das; ein einziges Bild ohne Treffer setzte alles zurück.
+- **Lösung:**
+  - Vorschau mit derselben Suche wie die Aufnahme (`detectCards`, Mehrkarten + Einzelkarten-Rückfall), im
+    schnellen Modus nur dann mit Einzelkarten-Suche, wenn sie das Ergebnis ändern kann (`fast`). Der Gaußfilter
+    rechnet innen ohne Randspiegelung (gleiches Ergebnis, schneller).
+  - Neuer Auslöser (`trigger.ts`): Bewegung relativ zur Kartengröße gegen die geglättete Lage, je Karte Median
+    der vier Ecken; ruhig = ≤ 3 % der Diagonale für 300 ms; Aussetzer bis 450 ms werden überbrückt; Schärfe
+    relativ zum besten Wert der letzten 2,5 s (≥ 50 %, feste Untergrenze 12); nach 1,2 s mit Karte im Bild
+    auch bei mäßiger Bewegung (≤ 7 %). Geraten wird dadurch nicht: das Foto wird wie bisher gegen den Katalog
+    geprüft. Doppel-Schutz folgt der Karte, solange sie im Bild bleibt.
+- **Messung** (`src/scan/camsim.ts`: künstliche Handykamera mit Holz-/dunklem/hellem Tisch, Lampenlicht,
+  Hülle mit Glanzrand und wanderndem Spiegelstreifen, Toploader, Finger, Wackeln 0,3–1,5 Hz + Zittern 8–12 Hz,
+  Bewegungsunschärfe bei 1/30 s, Rauschen; 6 echte TCGdex-Kartenbilder, nicht im Repo). Vorschau 8 Bilder/s,
+  Abbruch nach 15 s:
+
+  | Szenen | vorher | nur bessere Suche | neu |
+  | --- | --- | --- | --- |
+  | leichtes Wackeln, ohne/Hülle/Toploader (9) | 3 ausgelöst (1,9–3,1 s) | 5 (2,3–9,6 s) | 9 (0,6–1,3 s) |
+  | normales Wackeln (9) | 0 | 0 | 9 (0,6–1,3 s) |
+  | starkes Wackeln, Hülle (3) | 0 | 0 | 3 (1,1–1,3 s) |
+  | Karte wird ins Bild geschoben (3) | 1 | 1 | 3 (1,4–1,8 s, erst nach Ankunft) |
+  | leerer Tisch (3) | 0 | 0 | 0 |
+
+  Das Foto zeigte beim Auslösen jedes Mal die Karte (Überdeckung mit der wahren Lage 0,74–0,99; die
+  niedrigen Werte sind Toploader, deren Rand gefunden wird – die Bildsuche prüft dafür engere Ausschnitte).
+  Die Kurzfassung läuft als Test (`capture.sim.test.ts`).
+- **Gegenprobe in der echten App:** Chrome mit dem künstlichen Kamerabild als Videodatei
+  (`--use-file-for-fake-video-capture`, Karte in Hülle bzw. Toploader, 40 s): alte Version nie ausgelöst, neue
+  1,2–2,0 s nach dem Erscheinen der Karte, eine Aufnahme je Karte.
+- **Offen:** Echte Handyvideos fehlen noch. Die Erkennung nach dem Auslösen (Bildsuche, ggf. Texterkennung)
+  dauert unverändert einige Sekunden.

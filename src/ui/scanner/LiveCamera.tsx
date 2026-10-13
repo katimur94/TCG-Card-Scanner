@@ -1,4 +1,4 @@
-// Live-Kamera: findet Karten im Bild (ca. 8 Bilder/s), löst automatisch aus, sobald sie ruhig und scharf
+// Live-Kamera: findet Karten im Bild (bis 8 Bilder/s), löst automatisch aus, sobald sie ruhig und scharf
 // im Bild liegen, erkennt bis zu 9 Karten pro Aufnahme und lässt sie auf den Stapel fliegen.
 
 import { AnimatePresence, motion } from 'framer-motion';
@@ -161,7 +161,9 @@ export function LiveCamera({ paused, onPhase }: { paused: boolean; onPhase?: (p:
           }
         }
         setHint(glareSeen ? 'Spiegelung – Karte leicht kippen' : null);
-        trigger.current.markFired(cards.map((c) => c.quad.map(([x, y]) => [(x * 640) / Math.max(pw, ph), (y * 640) / Math.max(pw, ph)]) as Quad), (ph * 640) / Math.max(pw, ph));
+        // Automatische Aufnahme: der Auslöser kennt die Lage schon aus der Vorschau (gleiche Koordinaten wie die
+        // folgenden Vorschaubilder); nur nach dem Auslöser-Knopf die Lage aus dem Foto übernehmen.
+        if (manual) trigger.current.markFired(cards.map((c) => c.quad.map(([x, y]) => [(x * 640) / Math.max(pw, ph), (y * 640) / Math.max(pw, ph)]) as Quad), (ph * 640) / Math.max(pw, ph));
       } catch (err) {
         console.error('[HoloScan] Aufnahme', err);
         setHint('Erkennung fehlgeschlagen – nochmal versuchen');
